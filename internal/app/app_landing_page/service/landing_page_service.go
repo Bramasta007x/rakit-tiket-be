@@ -5,15 +5,16 @@ import (
 	"database/sql"
 
 	"rakit-tiket-be/internal/app/app_landing_page/dao"
-	"rakit-tiket-be/pkg/entity"
+	pubEntity "rakit-tiket-be/pkg/entity"
+	entity "rakit-tiket-be/pkg/entity/app_landing_page"
 )
 
 type LandingPageService interface {
 	Search(ctx context.Context, query entity.LandingPageQuery) (entity.LandingPages, error)
 	Insert(ctx context.Context, pages entity.LandingPages) error
 	Update(ctx context.Context, pages entity.LandingPages) error
-	Delete(ctx context.Context, id entity.UUID) error
-	SoftDelete(ctx context.Context, id entity.UUID) error
+	Delete(ctx context.Context, id pubEntity.UUID) error
+	SoftDelete(ctx context.Context, id pubEntity.UUID) error
 }
 
 type landingPageService struct {
@@ -26,10 +27,7 @@ func MakeLandingPageService(sqlDB *sql.DB) LandingPageService {
 	}
 }
 
-func (s landingPageService) Search(
-	ctx context.Context,
-	query entity.LandingPageQuery,
-) (entity.LandingPages, error) {
+func (s landingPageService) Search(ctx context.Context, query entity.LandingPageQuery) (entity.LandingPages, error) {
 
 	dbTrx := dao.NewTransaction(ctx, s.sqlDB)
 	defer dbTrx.GetSqlTx().Rollback()
@@ -42,10 +40,7 @@ func (s landingPageService) Search(
 	return pages, nil
 }
 
-func (s landingPageService) Insert(
-	ctx context.Context,
-	pages entity.LandingPages,
-) error {
+func (s landingPageService) Insert(ctx context.Context, pages entity.LandingPages) error {
 
 	dbTrx := dao.NewTransaction(ctx, s.sqlDB)
 	defer dbTrx.GetSqlTx().Rollback()
@@ -61,10 +56,7 @@ func (s landingPageService) Insert(
 	return nil
 }
 
-func (s landingPageService) Update(
-	ctx context.Context,
-	pages entity.LandingPages,
-) error {
+func (s landingPageService) Update(ctx context.Context, pages entity.LandingPages) error {
 
 	dbTrx := dao.NewTransaction(ctx, s.sqlDB)
 	defer dbTrx.GetSqlTx().Rollback()
@@ -80,10 +72,7 @@ func (s landingPageService) Update(
 	return nil
 }
 
-func (s landingPageService) Delete(
-	ctx context.Context,
-	id entity.UUID,
-) error {
+func (s landingPageService) Delete(ctx context.Context, id pubEntity.UUID) error {
 
 	dbTrx := dao.NewTransaction(ctx, s.sqlDB)
 	defer dbTrx.GetSqlTx().Rollback()
@@ -99,10 +88,7 @@ func (s landingPageService) Delete(
 	return nil
 }
 
-func (s landingPageService) SoftDelete(
-	ctx context.Context,
-	id entity.UUID,
-) error {
+func (s landingPageService) SoftDelete(ctx context.Context, id pubEntity.UUID) error {
 
 	dbTrx := dao.NewTransaction(ctx, s.sqlDB)
 	defer dbTrx.GetSqlTx().Rollback()

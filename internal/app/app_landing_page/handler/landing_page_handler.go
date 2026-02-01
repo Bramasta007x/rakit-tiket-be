@@ -4,7 +4,8 @@ import (
 	"net/http"
 
 	"rakit-tiket-be/internal/app/app_landing_page/service"
-	"rakit-tiket-be/pkg/entity"
+	pubEntity "rakit-tiket-be/pkg/entity"
+	entity "rakit-tiket-be/pkg/entity/app_landing_page"
 
 	"github.com/labstack/echo/v4"
 )
@@ -17,9 +18,7 @@ type landingPageHandler struct {
 	landingPageService service.LandingPageService
 }
 
-func MakeLandingPageHandler(
-	landingPageService service.LandingPageService,
-) landingPageHandler {
+func MakeLandingPageHandler(landingPageService service.LandingPageService) landingPageHandler {
 	return landingPageHandler{
 		landingPageService: landingPageService,
 	}
@@ -136,7 +135,7 @@ func (h landingPageHandler) updateLandingPage(c echo.Context) error {
 }
 
 func (h landingPageHandler) softDeleteLandingPage(c echo.Context) error {
-	id := entity.UUID(c.Param("id"))
+	id := pubEntity.UUID(c.Param("id"))
 
 	if err := h.landingPageService.SoftDelete(
 		c.Request().Context(),

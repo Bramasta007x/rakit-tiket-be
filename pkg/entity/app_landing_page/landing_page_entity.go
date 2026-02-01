@@ -1,5 +1,9 @@
 package entity
 
+import (
+	pubEntity "rakit-tiket-be/pkg/entity"
+)
+
 type (
 	LandingPageQuery struct {
 		IDs       []string `query:"id"`
@@ -7,7 +11,7 @@ type (
 	}
 
 	LandingPage struct {
-		ID UUID `json:"id"`
+		ID pubEntity.UUID `json:"id"`
 
 		BannerImage *string `json:"banner_image"`
 		VenueImage  *string `json:"venue_image"`
@@ -23,7 +27,7 @@ type (
 
 		TermsAndConditions []string `json:"terms_and_conditions"`
 
-		DaoEntity
+		pubEntity.DaoEntity
 	}
 
 	LandingPages []LandingPage
