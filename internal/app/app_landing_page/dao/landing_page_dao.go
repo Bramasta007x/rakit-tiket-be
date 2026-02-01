@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"rakit-tiket-be/pkg/entity"
+	pubEntity "rakit-tiket-be/pkg/entity"
+	entity "rakit-tiket-be/pkg/entity/app_landing_page"
 
 	"gitlab.com/threetopia/sqlgo/v2"
 )
@@ -14,8 +15,8 @@ type LandingPageDAO interface {
 	Search(ctx context.Context, query entity.LandingPageQuery) (entity.LandingPages, error)
 	Insert(ctx context.Context, pages entity.LandingPages) error
 	Update(ctx context.Context, pages entity.LandingPages) error
-	Delete(ctx context.Context, id entity.UUID) error
-	SoftDelete(ctx context.Context, id entity.UUID) error
+	Delete(ctx context.Context, id pubEntity.UUID) error
+	SoftDelete(ctx context.Context, id pubEntity.UUID) error
 }
 
 type landingPageDAO struct {
@@ -28,7 +29,7 @@ func MakeLandingPageDAO(dbTrx DBTransaction) LandingPageDAO {
 	}
 }
 
-func (d landingPageDAO) Search(ctx context.Context,query entity.LandingPageQuery) (entity.LandingPages, error) {
+func (d landingPageDAO) Search(ctx context.Context, query entity.LandingPageQuery) (entity.LandingPages, error) {
 
 	sqlSelect := sqlgo.NewSQLGoSelect().
 		SetSQLSelect("lp.id", "id").
@@ -128,7 +129,7 @@ func (d landingPageDAO) Insert(ctx context.Context, pages entity.LandingPages) e
 
 	for i, page := range pages {
 		page.CreatedAt = time.Now()
-		page.ID = entity.MakeUUID(
+		page.ID = pubEntity.MakeUUID(
 			page.DataHash.String(),
 			page.CreatedAt.String(),
 		)
@@ -205,7 +206,7 @@ func (d landingPageDAO) Update(ctx context.Context, pages entity.LandingPages) e
 	return nil
 }
 
-func (d landingPageDAO) Delete(ctx context.Context, id entity.UUID) error {
+func (d landingPageDAO) Delete(ctx context.Context, id pubEntity.UUID) error {
 	sql := sqlgo.NewSQLGo().
 		SetSQLSchema("public").
 		SetSQLDelete("landing_page_configs").
@@ -220,7 +221,7 @@ func (d landingPageDAO) Delete(ctx context.Context, id entity.UUID) error {
 	return err
 }
 
-func (d landingPageDAO) SoftDelete(ctx context.Context, id entity.UUID) error {
+func (d landingPageDAO) SoftDelete(ctx context.Context, id pubEntity.UUID) error {
 	sql := sqlgo.NewSQLGo().
 		SetSQLSchema("public").
 		SetSQLUpdate("landing_page_configs").
