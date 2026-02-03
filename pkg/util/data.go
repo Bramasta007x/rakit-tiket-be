@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/url"
 	"regexp"
+	"strings"
 )
 
 func CopyData(origin interface{}, target interface{}) error {
@@ -39,14 +40,14 @@ func ReturnNil(val interface{}) interface{} {
 
 // MakeHash generates a hash from the provided fields.
 // If caseInsensitive is true, all fields are converted to lowercase before hashing.
-// func MakeHash(caseInsensitive bool, fields ...string) string {
-// 	if caseInsensitive {
-// 		for i, v := range fields {
-// 			fields[i] = strings.ToLower(v)
-// 		}
-// 	}
-// 	return MakeSHA512(fields...)
-// }
+func MakeHash(caseInsensitive bool, fields ...string) string {
+	if caseInsensitive {
+		for i, v := range fields {
+			fields[i] = strings.ToLower(v)
+		}
+	}
+	return MakeSHA512(fields...)
+}
 
 // password.Hash
 

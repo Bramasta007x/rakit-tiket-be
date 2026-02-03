@@ -2,7 +2,9 @@ package util
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
+	"unicode"
 )
 
 // English and Bahasa Indonesia stop words
@@ -63,4 +65,81 @@ func CleanSpecialChars(input string) string {
 	// cleaned = strings.TrimSpace(cleaned)
 
 	return cleaned
+}
+
+func CleanUsername(username string) string {
+	// Trim leading and trailing white spaces
+	username = strings.TrimSpace(username)
+
+	// Define a regular expression to remove non-alphanumeric characters, except spaces
+	reg := regexp.MustCompile(`[^\p{L}\p{N}\s]`)
+	username = reg.ReplaceAllString(username, "")
+
+	// Remove all emoticons
+	username = RemoveEmoticons(username)
+
+	// Trim spaces again in case there are multiple spaces left
+	username = strings.TrimSpace(username)
+
+	return username
+}
+
+func RemoveEmoticons(input string) string {
+	var result []rune
+	for _, r := range input {
+		if !IsEmoticon(r) {
+			result = append(result, r)
+		}
+	}
+	return string(result)
+}
+
+func IsEmoticon(r rune) bool {
+	// Check if the character is an emoticon using unicode properties
+	return unicode.Is(unicode.So, r) || unicode.Is(unicode.Sk, r)
+}
+
+func ShortenString(text string, length int) string {
+	if len(text) <= length {
+		return text
+	}
+	// Find the last space within the allowed length
+	shortened := text[:length]
+	lastSpace := strings.LastIndex(shortened, " ")
+	if lastSpace == -1 {
+		// If no space found, return the original slice (could cut a word)
+		return shortened
+	}
+	// Otherwise, return up to the last space
+	return shortened[:lastSpace] + "..."
+}
+
+func AtoF32(str string) float32 {
+	result, _ := strconv.ParseFloat(str, 32)
+	return float32(result)
+}
+
+func AtoF64(str string) float64 {
+	result, _ := strconv.ParseFloat(str, 64)
+	return result
+}
+
+func BtoA(val bool) string {
+	return strconv.FormatBool(val)
+}
+
+func AtoB(val string) bool {
+	valB, err := strconv.ParseBool(val)
+	if err != nil {
+		return false
+	}
+	return valB
+}
+
+func AtoI(val string) int {
+	valB, err := strconv.Atoi(val)
+	if err != nil {
+		return 0
+	}
+	return valB
 }
