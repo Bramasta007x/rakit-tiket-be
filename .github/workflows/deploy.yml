@@ -18,6 +18,6 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            cd home/rakit-tiket/rakit-tiket-core/rakit-tiket-be
+            cd ~/rakit-tiket-core/rakit-tiket-be
             git pull origin main
             docker-compose up -d --build
