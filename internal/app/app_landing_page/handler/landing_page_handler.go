@@ -44,10 +44,7 @@ func (h landingPageHandler) searchLandingPages(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	pages, err := h.landingPageService.Search(
-		c.Request().Context(),
-		query,
-	)
+	pages, err := h.landingPageService.Search(c.Request().Context(), query)
 	if err != nil {
 		return echo.NewHTTPError(
 			http.StatusInternalServerError,
@@ -117,6 +114,7 @@ func (h landingPageHandler) updateLandingPages(c echo.Context) error {
 
 func (h landingPageHandler) updateLandingPage(c echo.Context) error {
 	var page entity.LandingPage
+
 	if err := c.Bind(&page); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
