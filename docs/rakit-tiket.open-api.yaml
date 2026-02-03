@@ -345,6 +345,19 @@ paths:
                         order_number: "JMF2025-00013"
                         payment_time: null
 
+  /admin/landing-page:
+    get:
+      tags: [Admin]
+      summary: Ambil data konfigurasi landing page
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Data konfigurasi landing page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LandingPageConfig"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -455,3 +468,90 @@ components:
               gender: { type: string }
               ticket_title: { type: string }
               document: { type: string }
+
+    LandingPageConfig:
+      type: object
+      required: []
+      properties:
+        event_name: { type: string, example: "Rakit Music Fest 2026" }
+        event_subtitle: { type: string, example: "Experience the Future of Sound in Malang" }
+        event_creator: { type: string, example: "mtp.project" }
+        event_date: { type: string, format: date, example: "2026-02-14" }
+        event_time_start: { type: string, example: "13:30" }
+        event_time_end: { type: string, example: "17:30" }
+        event_location: { type: string, example: "Istora Papua, Jayapura" }
+        logo_image: { type: string, example: "IMAGE_FILE" }
+        hero_id: { type: string, example: "hero_1" }
+        banner_image: { type: string, example: "IMAGE_FILE" }
+        banner_color: { type: string, example: "#000000" }
+        hero_button_id: { type: string, example: "hero_button_1" }
+        hero_button_text: { type: string, example: "Beli Tiket Sekarang" }
+        hero_button_link: { type: string, example: "https://google.com" }
+        hero_countdown_id: { type: string, example: "countdown_1" }
+        hero_countdown_date: { type: string, format: date, example: "2026-02-14" }
+        hero_countdown_time_start: { type: string, example: "13:30" }
+        hero_countdown_time_end: { type: string, example: "17:30" }
+        hero_countdown_after_text: { type: string, example: "Event Selesai" }
+        venue_id: { type: string, example: "venue_1" }
+        venue_image: { type: string, example: "IMAGE_FILE" }
+        venue_layout: { type: string, example: "IMAGE_FILE" }
+        venue_address: { type: string, example: "Jl. Raya Jayapura No. 123" }
+        venue_map_link: { type: string, example: "https://google.com" }
+        artist_id: { type: string, example: "artist_1" }
+        artist_title: { type: string, example: "Star-Studded Lineup" }
+        artist_subtitle: { type: string, example: "Menghadirkan musisi papan atas yang akan mengguncang panggung." }
+        artist:
+          type: array
+          items:
+            type: object
+            required: [id, name, genre, image]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string, example: "Artist Name" }
+              genre: { type: string, example: "Artist Genre" }
+              image: { type: string, example: "IMAGE_FILE" }
+              artist_social_media:
+                type: array
+                items:
+                  type: object
+                  required: [name, link]
+                  properties:
+                    name: { type: string, example: "Instagram" }
+                    link: { type: string, example: "https://instagram.com" }
+        ticket_id: { type: string, example: "ticket_1" }
+        ticket_title: { type: string, example: "Secure Your Spot" }
+        ticket_description: { type: string, example: "Secure your spot at Rakit Music Fest 2026 with our exclusive ticket options." }
+        tickets:
+          type: array
+          items:
+            type: object
+            required: [id, title, description, price, total, remaining, is_presale, order_priority]
+            properties:
+              id: { type: string, format: uuid }
+              title: { type: string, example: "Gold" }
+              description: { type: string, example: "VIP Access with Backstage Meet & Greet" }
+              price: { type: number, example: 450000 }
+              total: { type: integer, example: 500 }
+              remaining: { type: integer, example: 327 }
+              is_presale: { type: boolean, example: false }
+              order_priority: { type: integer, example: 1 }
+        terms_and_conditions_id: { type: string, example: "terms_and_conditions_1" }
+        terms_and_conditions:
+          type: array
+          items:
+            type: object
+            required: [label, items]
+            properties:
+              label: { type: string, example: "Terms and conditions 1" }
+              items:
+                type: array
+                items: { type: string }
+        faq_id: { type: string, example: "faq_1" }
+        faq:
+          type: array
+          items:
+            type: object
+            required: [question, answer]
+            properties:
+              question: { type: string, example: "Apakah boleh membawa makanan dari luar?" }
+              answer: { type: string, example: "Tidak boleh. Kami menyediakan tenant F&B di dalam venue." }
