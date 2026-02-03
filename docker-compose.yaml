@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  # Service Database
+  db:
+    image: postgres:15-alpine
+    container_name: rakit-tiket-db
+    restart: always
+    environment:
+      # Docker mengambil nilai dari file .env di folder yang sama
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_DATABASE}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # Service Aplikasi Go Kamu
+  app:
+    build: .
+    container_name: rakit-tiket-app
+    restart: always
+    ports:
+      - "${PORT}:${PORT}"
+    depends_on:
+      - db
+    environment:
+      # Aplikasi Go butuh tahu host DB adalah nama service ("db")
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_DATABASE: ${DB_DATABASE}
+      PORT: ${PORT}
+      MIGRATION_PATH: /app/internal/pkg/scripts
+      LOG_ENVIRONMENT: production
+
+volumes:
+  pgdata:
