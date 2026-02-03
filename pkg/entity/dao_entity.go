@@ -20,9 +20,9 @@ type (
 	}
 )
 
-// func (de DaoEntity) MakeDataHash(fields ...string) Hash {
-// 	return MakeHash(fields...)
-// }
+func (de DaoEntity) MakeDataHash(fields ...string) Hash {
+	return MakeHash(fields...)
+}
 
 // Paging and Limit
 type (

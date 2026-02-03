@@ -4,9 +4,9 @@ import "rakit-tiket-be/pkg/util"
 
 type Hash string
 
-// func MakeHash(values ...string) Hash {
-// 	return Hash(util.MakeHash(true, values...))
-// }
+func MakeHash(values ...string) Hash {
+	return Hash(util.MakeHash(true, values...))
+}
 
 func (e Hash) String() string {
 	return string(e)
