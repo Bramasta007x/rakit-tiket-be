@@ -49,8 +49,7 @@ func (d fileDAO) Search(ctx context.Context, query entity.FileQuery) (entity.Fil
 	sqlWhere := sqlgo.NewSQLGoWhere()
 
 	if len(query.IDs) > 0 {
-		// Pastikan perubahan ini tersimpan dan server di-restart
-		sqlWhere.SetSQLWhere("AND", "f.id", "IN", query.IDs)
+		sqlWhere.SetSQLWhere("AND", "f.id", "IN", query.IDs.Strings())
 	}
 	if len(query.RelationQuery.RelationIDs) > 0 {
 		sqlWhere.SetSQLWhere("AND", "f.relation_id", "IN", query.RelationQuery.RelationIDs.Strings())
@@ -116,11 +115,11 @@ func (d fileDAO) Count(ctx context.Context, query entity.FileQuery) (int, error)
 	sqlWhere := sqlgo.NewSQLGoWhere()
 
 	if len(query.IDs) > 0 {
-		sqlWhere.SetSQLWhere("AND", "f.id", "IN", query.IDs)
+		sqlWhere.SetSQLWhere("AND", "f.id", "IN", query.IDs.Strings())
 	}
 
 	if len(query.RelationQuery.RelationIDs) > 0 {
-		sqlWhere.SetSQLWhere("AND", "f.relation_id", "IN", query.RelationQuery.RelationIDs)
+		sqlWhere.SetSQLWhere("AND", "f.relation_id", "IN", query.RelationQuery.RelationIDs.Strings())
 	}
 
 	if len(query.Names) > 0 {
