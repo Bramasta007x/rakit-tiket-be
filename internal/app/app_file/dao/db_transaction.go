@@ -9,13 +9,13 @@ import (
 type DBTransaction interface {
 	dao.DBTransaction
 
-	GetLandingPageDAO() LandingPageDAO
+	GetFileDao() FileDAO
 }
 
 type dbTransaction struct {
 	dao.DBTransaction
 
-	landingPageDAO LandingPageDAO
+	fileDao FileDAO
 }
 
 func NewTransaction(ctx context.Context, sqlDB *sql.DB) DBTransaction {
@@ -23,10 +23,10 @@ func NewTransaction(ctx context.Context, sqlDB *sql.DB) DBTransaction {
 		DBTransaction: dao.NewTransaction(ctx, sqlDB),
 	}
 
-	dbTrx.landingPageDAO = MakeLandingPageDAO(dbTrx)
+	dbTrx.fileDao = MakeFileDAO(dbTrx)
 	return dbTrx
 }
 
-func (dbTrx *dbTransaction) GetLandingPageDAO() LandingPageDAO {
-	return dbTrx.landingPageDAO
+func (dbTrx *dbTransaction) GetFileDao() FileDAO {
+	return dbTrx.fileDao
 }

@@ -16,9 +16,7 @@ type httpHandler struct {
 	landingPageHandler LandingPageHandler
 }
 
-func MakeHttpAdapter(
-	landingPageService service.LandingPageService,
-) HttpHandler {
+func MakeHttpAdapter(landingPageService service.LandingPageService) HttpHandler {
 	return httpHandler{
 		landingPageService: landingPageService,
 		landingPageHandler: MakeLandingPageHandler(landingPageService),

@@ -5,8 +5,12 @@ import (
 	"fmt"
 	"os"
 
+	fileHandler "rakit-tiket-be/internal/app/app_file/handler"
+	fileService "rakit-tiket-be/internal/app/app_file/service"
+
 	landingPageHandler "rakit-tiket-be/internal/app/app_landing_page/handler"
 	landingPageService "rakit-tiket-be/internal/app/app_landing_page/service"
+
 	"rakit-tiket-be/internal/pkg/client"
 	"rakit-tiket-be/pkg/constant"
 	"rakit-tiket-be/pkg/util"
@@ -23,7 +27,9 @@ func main() {
 		nil,
 	)
 
+	// =====================
 	// PostgreSQL
+	// =====================
 	pgClient := client.MakePostgreSQLClientFromEnv()
 
 	if err := pgClient.Migration(); err != nil {
@@ -33,22 +39,32 @@ func main() {
 	}
 	log.Info(context.Background(), "Migration success")
 
-	// --- HTTP Server ---
+	sqlDB := pgClient.GetSQLDB()
+
+	// =====================
+	// HTTP Server
+	// =====================
 	e := echo.New()
 
 	// =====================
-	// Service & Handler
+	// Services
 	// =====================
-	sqlDB := pgClient.GetSQLDB()
-
 	landingPageSvc := landingPageService.MakeLandingPageService(sqlDB)
-	httpHandler := landingPageHandler.MakeHttpAdapter(landingPageSvc)
+	fileSvc := fileService.MakeFileService(log, sqlDB)
+
+	// =====================
+	// Handlers / Adapters
+	// =====================
+	landingPageAdapter := landingPageHandler.MakeHttpAdapter(landingPageSvc)
+	fileAdapter := fileHandler.MakeFileAdapter(log, fileSvc)
 
 	// =====================
 	// Register Routes
 	// =====================
 	apiGroup := e.Group("/api")
-	httpHandler.RegisterRoute(apiGroup)
+
+	landingPageAdapter.RegisterRoute(apiGroup)
+	fileAdapter.RegisterRouter(apiGroup)
 
 	// =====================
 	// Start Server
