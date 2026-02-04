@@ -34,6 +34,17 @@ services:
       MIGRATION_PATH: /app/internal/pkg/scripts
       LOG_ENVIRONMENT: production
 
+  frontend:
+    build:
+      context: ../rakit-tiket-fe
+      dockerfile: Dockerfile
+    container_name: rakit-tiket-fe
+    ports:
+      - "3000:80"
+    restart: always
+    environment:
+      - VITE_API_BASE_URL=http://212.85.24.75:8000/api
+
   swagger-ui:
     image: swaggerapi/swagger-ui
     container_name: rakit-tiket-swagger

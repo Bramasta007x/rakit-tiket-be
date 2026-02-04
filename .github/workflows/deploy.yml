@@ -18,6 +18,14 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           script: |
+            # 1. Update Backend
             cd ~/rakit-tiket-core/rakit-tiket-be
             git pull origin main
-            docker-compose up -d --build
+            
+            # 2. Update Frontend (Bersebelahan)
+            cd ~/rakit-tiket-core/rakit-tiket-fe
+            git pull origin main
+            
+            # 3. Jalankan Docker Compose dari folder BE
+            cd ~/rakit-tiket-core/rakit-tiket-be
+            docker compose up -d --build
