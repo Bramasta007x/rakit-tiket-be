@@ -1,14 +1,14 @@
 openapi: 3.0.3
 info:
-  title: Jayapura Music Fest E-Ticket API
-  version: 2.2.0
+  title: Rakit Tiket APIs
+  version: 1.0.0
   description: |
-    API versi **2 (Final FE Review #2 - Oktober 2025)**
+    API versi **1**
 
 servers:
-  - url: https://api.jayapuraticket.com/api/v1
+  - url: https://api.rakittiket.com/api/v1
     description: Production server
-  - url: http://localhost:8000/api/v1
+  - url: http://212.85.24.75:8080/api/v1
     description: Local development
 
 tags:
