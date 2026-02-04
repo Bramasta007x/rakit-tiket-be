@@ -2,6 +2,7 @@ package dao
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -74,10 +75,12 @@ func (d landingPageDAO) Search(ctx context.Context, query entity.LandingPageQuer
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 
 	var pages entity.LandingPages
 	for rows.Next() {
 		var page entity.LandingPage
+		var termsJSON []byte
 
 		if err := rows.Scan(
 			&page.ID,
@@ -89,13 +92,19 @@ func (d landingPageDAO) Search(ctx context.Context, query entity.LandingPageQuer
 			&page.EventTimeStart,
 			&page.EventTimeEnd,
 			&page.EventLocation,
-			&page.TermsAndConditions,
+			&termsJSON,
 			&page.DaoEntity.Deleted,
 			&page.DaoEntity.DataHash,
 			&page.DaoEntity.CreatedAt,
 			&page.DaoEntity.UpdatedAt,
 		); err != nil {
 			return nil, err
+		}
+
+		if len(termsJSON) > 0 {
+			if err := json.Unmarshal(termsJSON, &page.TermsAndConditions); err != nil {
+				page.TermsAndConditions = []string{}
+			}
 		}
 
 		pages = append(pages, page)
@@ -134,6 +143,11 @@ func (d landingPageDAO) Insert(ctx context.Context, pages entity.LandingPages) e
 			page.CreatedAt.String(),
 		)
 
+		termsJSON, err := json.Marshal(page.TermsAndConditions)
+		if err != nil {
+			termsJSON = []byte("[]")
+		}
+
 		sqlInsert.SetSQLInsertValue(
 			page.ID,
 			page.BannerImage,
@@ -144,7 +158,7 @@ func (d landingPageDAO) Insert(ctx context.Context, pages entity.LandingPages) e
 			page.EventTimeStart,
 			page.EventTimeEnd,
 			page.EventLocation,
-			page.TermsAndConditions,
+			termsJSON,
 			page.DataHash,
 			page.CreatedAt,
 		)
@@ -175,6 +189,12 @@ func (d landingPageDAO) Update(ctx context.Context, pages entity.LandingPages) e
 		now := time.Now()
 		page.UpdatedAt = &now
 
+		termsJSON, err := json.Marshal(page.TermsAndConditions)
+		if err != nil {
+			// Jika gagal, set array kosong default JSON
+			termsJSON = []byte("[]")
+		}
+
 		sql := sqlgo.NewSQLGo().
 			SetSQLSchema("public").
 			SetSQLUpdate("landing_page_configs").
@@ -186,12 +206,12 @@ func (d landingPageDAO) Update(ctx context.Context, pages entity.LandingPages) e
 			SetSQLUpdateValue("event_time_start", page.EventTimeStart).
 			SetSQLUpdateValue("event_time_end", page.EventTimeEnd).
 			SetSQLUpdateValue("event_location", page.EventLocation).
-			SetSQLUpdateValue("terms_and_conditions", page.TermsAndConditions).
+			SetSQLUpdateValue("terms_and_conditions", termsJSON).
 			SetSQLUpdateValue("data_hash", page.DataHash).
 			SetSQLUpdateValue("updated_at", page.UpdatedAt).
 			SetSQLWhere("AND", "id", "=", page.ID)
 
-		_, err := d.dbTrx.GetSqlTx().ExecContext(
+		_, err = d.dbTrx.GetSqlTx().ExecContext(
 			ctx,
 			sql.BuildSQL(),
 			sql.GetSQLGoParameter().GetSQLParameter()...,

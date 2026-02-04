@@ -1,4 +1,3 @@
-// 
 package main
 
 import (
@@ -28,9 +27,7 @@ func main() {
 		nil,
 	)
 
-	// =====================
 	// PostgreSQL
-	// =====================
 	pgClient := client.MakePostgreSQLClientFromEnv()
 
 	if err := pgClient.Migration(); err != nil {
@@ -42,34 +39,24 @@ func main() {
 
 	sqlDB := pgClient.GetSQLDB()
 
-	// =====================
 	// HTTP Server
-	// =====================
 	e := echo.New()
 
-	// =====================
 	// Services
-	// =====================
-	landingPageSvc := landingPageService.MakeLandingPageService(sqlDB)
-	fileSvc := fileService.MakeFileService(log, sqlDB)
+	landingPageService := landingPageService.MakeLandingPageService(sqlDB)
+	fileService := fileService.MakeFileService(log, sqlDB)
 
-	// =====================
 	// Handlers / Adapters
-	// =====================
-	landingPageAdapter := landingPageHandler.MakeHttpAdapter(landingPageSvc)
-	fileAdapter := fileHandler.MakeFileAdapter(log, fileSvc)
+	landingPageAdapter := landingPageHandler.MakeHttpAdapter(landingPageService, fileService)
+	fileAdapter := fileHandler.MakeFileAdapter(log, fileService)
 
-	// =====================
 	// Register Routes
-	// =====================
 	apiGroup := e.Group("/api")
 
 	landingPageAdapter.RegisterRoute(apiGroup)
 	fileAdapter.RegisterRouter(apiGroup)
 
-	// =====================
 	// Start Server
-	// =====================
 	port := envgo.GetString("PORT", "8000")
 	log.Info(context.Background(), "Starting HTTP server on port "+port)
 	e.Logger.Fatal(e.Start(":" + port))

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	fileService "rakit-tiket-be/internal/app/app_file/service"
 	"rakit-tiket-be/internal/app/app_landing_page/service"
 
 	"github.com/labstack/echo/v4"
@@ -16,10 +17,10 @@ type httpHandler struct {
 	landingPageHandler LandingPageHandler
 }
 
-func MakeHttpAdapter(landingPageService service.LandingPageService) HttpHandler {
+func MakeHttpAdapter(landingPageService service.LandingPageService, fileService fileService.FileService) HttpHandler {
 	return httpHandler{
 		landingPageService: landingPageService,
-		landingPageHandler: MakeLandingPageHandler(landingPageService),
+		landingPageHandler: MakeLandingPageHandler(landingPageService, fileService),
 	}
 }
 
