@@ -1,9 +1,10 @@
 openapi: 3.0.3
 info:
   title: Rakit Tiket APIs
-  version: 1.0.0
+  version: 1.2.0
   description: |
-    API versi **1**
+    API versi **1.2**
+    - Added Upsert (Multipart/JSON) capability for Admin Landing Page
 
 servers:
   - url: https://api.rakittiket.com/api/v1
@@ -20,13 +21,26 @@ tags:
     description: Endpoint dashboard admin (auth required)
 
 paths:
+  # --------------------------------------------------------------------------
+  # PUBLIC ENDPOINTS
+  # --------------------------------------------------------------------------
+  /landing-page:
+    get:
+      tags: [Public]
+      summary: Ambil data konfigurasi landing page
+      description: Endpoint ini dipanggil oleh Frontend (Guest) untuk merender halaman utama.
+      responses:
+        "200":
+          description: Data konfigurasi landing page lengkap
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LandingPageConfig"
+
   /tickets:
     get:
       tags: [Public]
       summary: Ambil daftar semua jenis tiket
-      description: |
-        Mengambil daftar lengkap semua kategori tiket Jayapura Music Fest.
-        Data mencakup jenis, harga, total, dan sisa tiket yang tersedia.
       responses:
         "200":
           description: Daftar tiket berhasil diambil
@@ -39,43 +53,11 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Ticket"
-              examples:
-                success:
-                  value:
-                    data:
-                      - id: "4d20e9c6-345b-4a77-bcc9-19cfa900f111"
-                        code: "GOLD"
-                        title: "Gold"
-                        description: "VIP Access with Backstage Meet & Greet"
-                        price: 450000
-                        total: 500
-                        remaining: 327
-                        is_presale: false
-                        order_priority: 1
-                      - id: "6e94a2f1-7a14-40ad-a95e-65e242aaff22"
-                        code: "SILVER"
-                        title: "Silver"
-                        description: "Standard Access with Preferred Zone"
-                        price: 350000
-                        total: 1500
-                        remaining: 910
-                        is_presale: false
-                        order_priority: 2
-                      - id: "a5b192f2-5dc5-4df0-b087-d671acb8ff33"
-                        code: "FESTIVAL"
-                        title: "Festival"
-                        description: "General Admission - Standing Area"
-                        price: 250000
-                        total: 4000
-                        remaining: 2755
-                        is_presale: false
-                        order_priority: 3
 
   /register:
     post:
       tags: [Public]
       summary: Registrasi & checkout tiket
-      description: Membuat registrant, attendees, dan order baru serta mengembalikan Midtrans Snap Token.
       requestBody:
         required: true
         content:
@@ -87,17 +69,14 @@ paths:
                   $ref: "#/components/schemas/RegistrantInput"
                 attendees:
                   type: array
-                  minItems: 1
-                  maxItems: 4
                   items:
                     $ref: "#/components/schemas/AttendeeInput"
                 payment_method:
                   type: string
                   enum: [midtrans_snap]
-                  example: midtrans_snap
       responses:
         "201":
-          description: Registrasi berhasil (FE redirect ke Midtrans)
+          description: Registrasi berhasil
           content:
             application/json:
               schema:
@@ -109,35 +88,18 @@ paths:
                     type: object
                     properties:
                       id: { type: string, format: uuid }
-                      unique_code: { type: string, example: JMF-2025-00123 }
-              examples:
-                success:
-                  value:
-                    order:
-                      order_id: "6e1fffd8-c112-4cb0-9f4f-9078e7e27fa1"
-                      order_number: "JMF2025-00012"
-                      amount: 450000
-                      currency: "IDR"
-                      payment_status: "pending"
-                      midtrans_snap_token: "SNAP-ABC123XYZ"
-                      redirect_url: "https://app.sandbox.midtrans.com/snap/v2/vtweb/SNAP-ABC123XYZ"
-                    registrant:
-                      id: "e7c1b1b9-12a4-4b4b-9f14-46aaf223b18a"
-                      unique_code: "JMF-2025-00123"
+                      unique_code: { type: string }
 
+  # --------------------------------------------------------------------------
+  # PAYMENT ENDPOINTS
+  # --------------------------------------------------------------------------
   /payment/webhook:
     post:
       tags: [Payment]
       summary: Webhook notifikasi pembayaran Midtrans
-      description: Endpoint menerima notifikasi status transaksi dari Midtrans.
       responses:
         "200":
           description: Webhook diterima
-          content:
-            application/json:
-              examples:
-                ok:
-                  value: { status: "ok" }
 
   /orders/{order_number}/status:
     get:
@@ -148,7 +110,6 @@ paths:
           name: order_number
           schema: { type: string }
           required: true
-          example: JMF2025-00012
       responses:
         "200":
           description: Status order ditemukan
@@ -156,62 +117,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OrderStatusResponse"
-              examples:
-                pending:
-                  value:
-                    order_number: "JMF2025-00012"
-                    payment_status: "pending"
-                    amount: 450000
-                    payment_time: null
-                    registrant:
-                      name: "Michael Tan"
-                      email: "michael.tan@example.com"
-                      phone: "081234567890"
-                      gender: "M"
-                      birthdate: "1996-09-20"
-                    attendees:
-                      - name: "Michael Tan"
-                        gender: "M"
-                        ticket_title: "Gold"
-                        document: null
-                paid:
-                  value:
-                    order_number: "JMF2025-00012"
-                    payment_status: "paid"
-                    amount: 450000
-                    payment_time: "2025-08-12T10:25:32Z"
-                    registrant:
-                      name: "Michael Tan"
-                      email: "michael.tan@example.com"
-                      phone: "081234567890"
-                      gender: "M"
-                      birthdate: "1996-09-20"
-                    attendees:
-                      - name: "Michael Tan"
-                        gender: "M"
-                        ticket_title: "Gold"
-                        document: "data:application/pdf;base64,JVBERi0xLjQKJ..."
-                failed:
-                  value:
-                    order_number: "JMF2025-00013"
-                    payment_status: "failed"
-                    amount: 350000
-                    payment_time: null
-                expired:
-                  value:
-                    order_number: "JMF2025-00014"
-                    payment_status: "expired"
-                    amount: 250000
-                    payment_time: null
-                cancelled:
-                  value:
-                    order_number: "JMF2025-00015"
-                    payment_status: "cancelled"
-                    amount: 300000
-                    payment_time: null
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # --------------------------------------------------------------------------
+  # ADMIN ENDPOINTS
+  # --------------------------------------------------------------------------
   /admin/login:
     post:
       tags: [Admin]
@@ -233,9 +144,8 @@ paths:
               examples:
                 success:
                   value:
-                    token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    token: "jwt_token_here"
                     token_type: "bearer"
-                    expires_in: 3600
 
   /admin/dashboard/summary:
     get:
@@ -245,39 +155,15 @@ paths:
       responses:
         "200":
           description: Statistik utama
-          content:
-            application/json:
-              examples:
-                summary:
-                  value:
-                    total_tickets_sold: 185
-                    total_participants: 160
-                    total_income: 74250000
 
   /admin/dashboard/daily-sales:
     get:
       tags: [Admin]
-      summary: Statistik penjualan harian (per jenis tiket)
+      summary: Statistik penjualan harian
       security: [{ bearerAuth: [] }]
       responses:
         "200":
-          description: Data penjualan harian per jenis tiket
-          content:
-            application/json:
-              examples:
-                daily:
-                  value:
-                    - date: "2025-10-20"
-                      sales:
-                        - ticket_type: "Gold"
-                          total_sold: 22
-                          total_income: 9900000
-                        - ticket_type: "Silver"
-                          total_sold: 12
-                          total_income: 4200000
-                        - ticket_type: "Festival"
-                          total_sold: 8
-                          total_income: 2000000
+          description: Data penjualan harian
 
   /admin/participants/summary:
     get:
@@ -286,16 +172,7 @@ paths:
       security: [{ bearerAuth: [] }]
       responses:
         "200":
-          description: Statistik peserta & pembayaran
-          content:
-            application/json:
-              examples:
-                summary:
-                  value:
-                    total_participants: 160
-                    total_paid_payments: 145
-                    total_pending_payments: 10
-                    total_failed_payments: 5
+          description: Statistik peserta
 
   /admin/participants:
     get:
@@ -305,58 +182,94 @@ paths:
       parameters:
         - in: query
           name: ticket_types[]
-          schema:
-            type: array
-            items: { type: string }
-          style: form
-          explode: true
-          example: [Gold, Silver]
+          schema: { type: array, items: { type: string } }
         - in: query
           name: payment_status[]
-          schema:
-            type: array
-            items:
-              type: string
-              enum: [pending, paid, failed, expired, cancelled]
-          style: form
-          explode: true
-          example: [paid, pending]
+          schema: { type: array, items: { type: string } }
       responses:
         "200":
-          description: Daftar peserta dengan filter
-          content:
-            application/json:
-              examples:
-                list:
-                  value:
-                    data:
-                      - registrant_name: "Michael Tan"
-                        email: "michael.tan@example.com"
-                        phone: "081234567890"
-                        ticket_type: "Gold"
-                        payment_status: "paid"
-                        order_number: "JMF2025-00012"
-                        payment_time: "2025-10-20T12:30:05Z"
-                      - registrant_name: "Dewi Lestari"
-                        email: "dewi.lestari@example.com"
-                        phone: "081298765432"
-                        ticket_type: "Silver"
-                        payment_status: "pending"
-                        order_number: "JMF2025-00013"
-                        payment_time: null
+          description: Daftar peserta
 
+  # --------------------------------------------------------------------------
+  # ADMIN LANDING PAGE (UPSERT)
+  # --------------------------------------------------------------------------
   /admin/landing-page:
     get:
       tags: [Admin]
-      summary: Ambil data konfigurasi landing page
+      summary: Lihat konfigurasi landing page (View Admin)
       security: [{ bearerAuth: [] }]
       responses:
         "200":
-          description: Data konfigurasi landing page
+          description: Data konfigurasi ditemukan
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LandingPageConfig"
+                $ref: "#/components/schemas/LandingPageSettingsInput"
+
+    post:
+      tags: [Admin]
+      summary: Create Landing Page (Upsert Logic)
+      description: |
+        Membuat konfigurasi baru.
+        - Jika menggunakan **JSON**, hanya data teks yang disimpan.
+        - Jika menggunakan **Multipart**, data JSON dikirim dalam field `data` string, dan file dikirim terpisah.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LandingPageSettingsInput"
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/LandingPageMultipartInput"
+            encoding:
+              data:
+                contentType: application/json
+      responses:
+        "201":
+          description: Konfigurasi berhasil dibuat/disimpan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LandingPageSettingsInput"
+        "400":
+          description: Invalid Input / JSON Format Error
+
+    put:
+      tags: [Admin]
+      summary: Update Landing Page (Upsert Logic)
+      description: |
+        Mengupdate konfigurasi. Logic sama dengan POST (Upsert).
+        ID bisa dikirim di dalam body JSON atau parameter URL (opsional).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LandingPageSettingsInput"
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/LandingPageMultipartInput"
+            encoding:
+              data:
+                contentType: application/json
+      responses:
+        "200":
+          description: Konfigurasi berhasil diupdate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LandingPageSettingsInput"
+
+    delete:
+      tags: [Admin]
+      summary: Reset konfigurasi landing page
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Konfigurasi di-reset
 
 components:
   securitySchemes:
@@ -372,107 +285,61 @@ components:
         application/json:
           examples:
             notfound:
-              value:
-                message: "Order not found"
+              value: { message: "Resource not found" }
 
   schemas:
+    # ---------------- Basic Schemas ----------------
     Ticket:
       type: object
       properties:
         id: { type: string, format: uuid }
-        code: { type: string, example: GOLD }
-        title: { type: string, example: "Gold" }
-        description:
-          { type: string, example: "VIP Access with Backstage Meet & Greet" }
-        price: { type: number, example: 450000 }
-        total: { type: integer, example: 500 }
-        remaining: { type: integer, example: 320 }
-        is_presale: { type: boolean, example: false }
-        order_priority: { type: integer, example: 1 }
+        code: { type: string }
+        title: { type: string }
+        price: { type: number }
+        total: { type: integer }
+        remaining: { type: integer }
 
     RegistrantInput:
       type: object
       required: [name, email, phone]
       properties:
-        name: { type: string, example: "Michael Tan" }
-        email: { type: string, example: "michael.tan@example.com" }
-        phone: { type: string, example: "081234567890" }
-        gender: { type: string, enum: [M, F, O, U], example: "M" }
-        birthdate: { type: string, format: date, example: "1996-09-20" }
-        document:
-          type: string
-          description: Base64 encoded document file (PDF/Image)
-          example: "data:application/pdf;base64,JVBERi0xLjQKJ..."
+        name: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        gender: { type: string }
+        birthdate: { type: string, format: date }
 
     AttendeeInput:
       type: object
-      required: [ticket_id, name]
       properties:
         ticket_id: { type: string, format: uuid }
-        name: { type: string, example: "Michael Tan" }
-        gender: { type: string, enum: [M, F, O, U], example: "M" }
-        birthdate: { type: string, format: date, example: "1996-09-20" }
-        document:
-          type: string
-          description: Base64 encoded document file (PDF/Image)
-          example: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ..."
+        name: { type: string }
 
     OrderResponse:
       type: object
       properties:
-        order_id: { type: string, format: uuid }
-        order_number: { type: string, example: JMF2025-00012 }
-        amount: { type: number, example: 450000 }
-        currency: { type: string, example: IDR }
-        payment_status:
-          {
-            type: string,
-            enum: [pending, paid, failed, expired, cancelled],
-            example: pending,
-          }
-        midtrans_snap_token: { type: string, example: SNAP-ABC123XYZ }
-        redirect_url:
-          {
-            type: string,
-            format: uri,
-            example: https://app.sandbox.midtrans.com/snap/v2/vtweb/SNAP-ABC123XYZ,
-          }
+        order_number: { type: string }
+        midtrans_snap_token: { type: string }
 
     OrderStatusResponse:
       type: object
       properties:
-        order_number: { type: string, example: JMF2025-00012 }
-        payment_status:
-          {
-            type: string,
-            enum: [pending, paid, failed, expired, cancelled],
-            example: paid,
-          }
-        amount: { type: number, example: 450000 }
-        payment_time:
-          { type: string, format: date-time, example: 2025-10-20T12:30:05Z }
-        registrant:
-          type: object
-          properties:
-            name: { type: string }
-            email: { type: string }
-            phone: { type: string }
-            gender: { type: string }
-            birthdate: { type: string, format: date }
-        attendees:
-          type: array
-          items:
-            type: object
-            properties:
-              name: { type: string }
-              gender: { type: string }
-              ticket_title: { type: string }
-              document: { type: string }
+        order_number: { type: string }
+        payment_status: { type: string }
 
-    LandingPageConfig:
+    # ---------------- Admin Landing Page Schemas ----------------
+
+    # 1. Schema untuk Data JSON Murni
+    LandingPageSettingsInput:
       type: object
-      required: []
       properties:
+        id:
+          type: string
+          format: uuid
+          description: Optional saat POST, Wajib saat Update jika tidak ada di URL
+          example: "019a9041-088f-703a-9452-da1ba4d9bc56"
+        
+        # --- Event Info ---
         event_name: { type: string, example: "Rakit Music Fest 2026" }
         event_subtitle: { type: string, example: "Experience the Future of Sound in Malang" }
         event_creator: { type: string, example: "mtp.project" }
@@ -481,25 +348,33 @@ components:
         event_time_end: { type: string, example: "17:30" }
         event_location: { type: string, example: "Istora Papua, Jayapura" }
         logo_image: { type: string, example: "IMAGE_FILE" }
+
+        # --- Hero Section ---
         hero_id: { type: string, example: "hero_1" }
         banner_image: { type: string, example: "IMAGE_FILE" }
         banner_color: { type: string, example: "#000000" }
         hero_button_id: { type: string, example: "hero_button_1" }
         hero_button_text: { type: string, example: "Beli Tiket Sekarang" }
         hero_button_link: { type: string, example: "https://google.com" }
+        
+        # --- Countdown ---
         hero_countdown_id: { type: string, example: "countdown_1" }
         hero_countdown_date: { type: string, format: date, example: "2026-02-14" }
         hero_countdown_time_start: { type: string, example: "13:30" }
         hero_countdown_time_end: { type: string, example: "17:30" }
         hero_countdown_after_text: { type: string, example: "Event Selesai" }
+
+        # --- Venue Section ---
         venue_id: { type: string, example: "venue_1" }
         venue_image: { type: string, example: "IMAGE_FILE" }
         venue_layout: { type: string, example: "IMAGE_FILE" }
         venue_address: { type: string, example: "Jl. Raya Jayapura No. 123" }
         venue_map_link: { type: string, example: "https://google.com" }
+
+        # --- Artist Section ---
         artist_id: { type: string, example: "artist_1" }
         artist_title: { type: string, example: "Star-Studded Lineup" }
-        artist_subtitle: { type: string, example: "Menghadirkan musisi papan atas yang akan mengguncang panggung." }
+        artist_subtitle: { type: string, example: "Menghadirkan musisi papan atas." }
         artist:
           type: array
           items:
@@ -508,7 +383,7 @@ components:
             properties:
               id: { type: string, format: uuid }
               name: { type: string, example: "Artist Name" }
-              genre: { type: string, example: "Artist Genre" }
+              genre: { type: string, example: "Pop" }
               image: { type: string, example: "IMAGE_FILE" }
               artist_social_media:
                 type: array
@@ -518,34 +393,30 @@ components:
                   properties:
                     name: { type: string, example: "Instagram" }
                     link: { type: string, example: "https://instagram.com" }
+
+        # --- Ticket Section Info ---
         ticket_id: { type: string, example: "ticket_1" }
         ticket_title: { type: string, example: "Secure Your Spot" }
-        ticket_description: { type: string, example: "Secure your spot at Rakit Music Fest 2026 with our exclusive ticket options." }
+        ticket_description: { type: string, example: "Dapatkan tiket eksklusif." }
         tickets:
           type: array
           items:
-            type: object
-            required: [id, title, description, price, total, remaining, is_presale, order_priority]
-            properties:
-              id: { type: string, format: uuid }
-              title: { type: string, example: "Gold" }
-              description: { type: string, example: "VIP Access with Backstage Meet & Greet" }
-              price: { type: number, example: 450000 }
-              total: { type: integer, example: 500 }
-              remaining: { type: integer, example: 327 }
-              is_presale: { type: boolean, example: false }
-              order_priority: { type: integer, example: 1 }
-        terms_and_conditions_id: { type: string, example: "terms_and_conditions_1" }
+            $ref: "#/components/schemas/Ticket"
+
+        # --- Terms & Conditions ---
+        terms_and_conditions_id: { type: string, example: "tnc_1" }
         terms_and_conditions:
           type: array
           items:
             type: object
             required: [label, items]
             properties:
-              label: { type: string, example: "Terms and conditions 1" }
+              label: { type: string, example: "General Rules" }
               items:
                 type: array
-                items: { type: string }
+                items: { type: string, example: "No Weapons" }
+
+        # --- FAQ ---
         faq_id: { type: string, example: "faq_1" }
         faq:
           type: array
@@ -553,5 +424,33 @@ components:
             type: object
             required: [question, answer]
             properties:
-              question: { type: string, example: "Apakah boleh membawa makanan dari luar?" }
-              answer: { type: string, example: "Tidak boleh. Kami menyediakan tenant F&B di dalam venue." }
+              question: { type: string, example: "Boleh bawa makanan?" }
+              answer: { type: string, example: "Tidak boleh." }
+        
+    # 2. Schema untuk Multipart Form Data (File + JSON String)
+    LandingPageMultipartInput:
+      type: object
+      properties:
+        data:
+          description: |
+            JSON String yang berisi data konfigurasi (sesuai schema LandingPageSettingsInput).
+            Backend akan melakukan `json.Unmarshal` pada field ini.
+          $ref: "#/components/schemas/LandingPageSettingsInput"
+        banner_image_file:
+          type: string
+          format: binary
+          description: File gambar banner (optional)
+        venue_image_file:
+          type: string
+          format: binary
+          description: File gambar venue (optional)
+
+    # 3. Schema untuk Public View (Gabungan setting + data dinamis lain)
+    LandingPageConfig:
+      allOf:
+        - $ref: "#/components/schemas/LandingPageSettingsInput"
+        - type: object
+          properties:
+            tickets:
+              type: array
+              items: { $ref: "#/components/schemas/Ticket" }
