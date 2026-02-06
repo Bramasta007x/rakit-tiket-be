@@ -328,15 +328,12 @@ components:
         payment_status: { type: string }
 
     # ---------------- Admin Landing Page Schemas ----------------
-
-    # 1. Schema untuk Data JSON Murni
     LandingPageSettingsInput:
       type: object
       properties:
         id:
           type: string
           format: uuid
-          description: Optional saat POST, Wajib saat Update jika tidak ada di URL
           example: "019a9041-088f-703a-9452-da1ba4d9bc56"
         
         # --- Event Info ---
@@ -371,45 +368,11 @@ components:
         venue_address: { type: string, example: "Jl. Raya Jayapura No. 123" }
         venue_map_link: { type: string, example: "https://google.com" }
 
-        # --- Artist Section ---
-        artist_id: { type: string, example: "artist_1" }
-        artist_title: { type: string, example: "Star-Studded Lineup" }
-        artist_subtitle: { type: string, example: "Menghadirkan musisi papan atas." }
-        artist:
-          type: array
-          items:
-            type: object
-            required: [id, name, genre, image]
-            properties:
-              id: { type: string, format: uuid }
-              name: { type: string, example: "Artist Name" }
-              genre: { type: string, example: "Pop" }
-              image: { type: string, example: "IMAGE_FILE" }
-              artist_social_media:
-                type: array
-                items:
-                  type: object
-                  required: [name, link]
-                  properties:
-                    name: { type: string, example: "Instagram" }
-                    link: { type: string, example: "https://instagram.com" }
-
-        # --- Ticket Section Info ---
-        ticket_id: { type: string, example: "ticket_1" }
-        ticket_title: { type: string, example: "Secure Your Spot" }
-        ticket_description: { type: string, example: "Dapatkan tiket eksklusif." }
-        tickets:
-          type: array
-          items:
-            $ref: "#/components/schemas/Ticket"
-
         # --- Terms & Conditions ---
-        terms_and_conditions_id: { type: string, example: "tnc_1" }
         terms_and_conditions:
           type: array
           items:
             type: object
-            required: [label, items]
             properties:
               label: { type: string, example: "General Rules" }
               items:
@@ -417,12 +380,10 @@ components:
                 items: { type: string, example: "No Weapons" }
 
         # --- FAQ ---
-        faq_id: { type: string, example: "faq_1" }
         faq:
           type: array
           items:
             type: object
-            required: [question, answer]
             properties:
               question: { type: string, example: "Boleh bawa makanan?" }
               answer: { type: string, example: "Tidak boleh." }
