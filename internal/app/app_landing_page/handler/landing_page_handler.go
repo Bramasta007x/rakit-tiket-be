@@ -9,6 +9,7 @@ import (
 
 	fileService "rakit-tiket-be/internal/app/app_file/service"
 	"rakit-tiket-be/internal/app/app_landing_page/service"
+	"rakit-tiket-be/internal/pkg/middleware"
 	pubEntity "rakit-tiket-be/pkg/entity"
 	fileEntity "rakit-tiket-be/pkg/entity/app_file"
 	entity "rakit-tiket-be/pkg/entity/app_landing_page"
@@ -23,17 +24,22 @@ type LandingPageHandler interface {
 type landingPageHandler struct {
 	landingPageService service.LandingPageService
 	fileService        fileService.FileService
+	middleware         middleware.AuthMiddleware
 }
 
-func MakeLandingPageHandler(landingPageService service.LandingPageService, fileService fileService.FileService) landingPageHandler {
+func MakeLandingPageHandler(landingPageService service.LandingPageService, fileService fileService.FileService, middleware middleware.AuthMiddleware) landingPageHandler {
 	return landingPageHandler{
 		landingPageService: landingPageService,
 		fileService:        fileService,
+		middleware:         middleware,
 	}
 }
 
 func (h landingPageHandler) RegisterRouter(g *echo.Group) {
 	restricted := g.Group("/v1/admin")
+
+	restricted.Use(h.middleware.VerifyToken)
+	restricted.Use(h.middleware.RequireAdmin)
 
 	restricted.GET("/landing-pages", h.searchLandingPages)
 

@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"os"
 
+	authHandler "rakit-tiket-be/internal/app/app_auth/handler"
+	authService "rakit-tiket-be/internal/app/app_auth/service"
+
 	fileHandler "rakit-tiket-be/internal/app/app_file/handler"
 	fileService "rakit-tiket-be/internal/app/app_file/service"
 
@@ -12,6 +15,7 @@ import (
 	landingPageService "rakit-tiket-be/internal/app/app_landing_page/service"
 
 	"rakit-tiket-be/internal/pkg/client"
+	"rakit-tiket-be/internal/pkg/middleware"
 	"rakit-tiket-be/pkg/constant"
 	"rakit-tiket-be/pkg/util"
 
@@ -42,19 +46,25 @@ func main() {
 	// HTTP Server
 	e := echo.New()
 
+	// Middleware
+	authMiddleware := middleware.MakeAuthMiddleware(log)
+
 	// Services
 	landingPageService := landingPageService.MakeLandingPageService(sqlDB)
 	fileService := fileService.MakeFileService(log, sqlDB)
+	authSvc := authService.MakeAuthService(log, sqlDB)
 
 	// Handlers / Adapters
-	landingPageAdapter := landingPageHandler.MakeHttpAdapter(landingPageService, fileService)
+	landingPageAdapter := landingPageHandler.MakeHttpAdapter(landingPageService, fileService, authMiddleware)
 	fileAdapter := fileHandler.MakeFileAdapter(log, fileService)
+	authAdapter := authHandler.MakeHttpAdapter(log, authSvc)
 
 	// Register Routes
 	apiGroup := e.Group("/api")
 
 	landingPageAdapter.RegisterRoute(apiGroup)
 	fileAdapter.RegisterRouter(apiGroup)
+	authAdapter.RegisterRoute(apiGroup)
 
 	// Start Server
 	port := envgo.GetString("PORT", "8000")
