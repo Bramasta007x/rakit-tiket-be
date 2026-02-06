@@ -38,10 +38,10 @@ func MakeLandingPageHandler(landingPageService service.LandingPageService, fileS
 func (h landingPageHandler) RegisterRouter(g *echo.Group) {
 	restricted := g.Group("/v1/admin")
 
+	restricted.GET("/landing-pages", h.searchLandingPages)
+
 	restricted.Use(h.middleware.VerifyToken)
 	restricted.Use(h.middleware.RequireAdmin)
-
-	restricted.GET("/landing-pages", h.searchLandingPages)
 
 	restricted.POST("/landing-pages", h.insertLandingPages)
 	restricted.POST("/landing-page", h.upsertLandingPageWrapper)
@@ -54,16 +54,15 @@ func (h landingPageHandler) RegisterRouter(g *echo.Group) {
 
 func (h landingPageHandler) searchLandingPages(c echo.Context) error {
 	var query entity.LandingPageQuery
+
 	if err := c.Bind(&query); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	pages, err := h.landingPageService.Search(c.Request().Context(), query)
+
 	if err != nil {
-		return echo.NewHTTPError(
-			http.StatusInternalServerError,
-			err.Error(),
-		)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, pages)
@@ -71,18 +70,13 @@ func (h landingPageHandler) searchLandingPages(c echo.Context) error {
 
 func (h landingPageHandler) insertLandingPages(c echo.Context) error {
 	var pages entity.LandingPages
+
 	if err := c.Bind(&pages); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	if err := h.landingPageService.Insert(
-		c.Request().Context(),
-		pages,
-	); err != nil {
-		return echo.NewHTTPError(
-			http.StatusInternalServerError,
-			err.Error(),
-		)
+	if err := h.landingPageService.Insert(c.Request().Context(), pages); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusCreated, pages)
@@ -109,7 +103,9 @@ func (h landingPageHandler) handleMultipartLandingPage(c echo.Context) error {
 
 	// Ambil JSON String dari key "data"
 	jsonData := c.FormValue("data")
+
 	var landingPage entity.LandingPage
+
 	if err := json.Unmarshal([]byte(jsonData), &landingPage); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid JSON format in 'data' field: "+err.Error())
 	}
@@ -216,18 +212,13 @@ func (h landingPageHandler) handleMultipartLandingPage(c echo.Context) error {
 
 func (h landingPageHandler) insertLandingPage(c echo.Context) error {
 	var page entity.LandingPage
+
 	if err := c.Bind(&page); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	if err := h.landingPageService.Insert(
-		c.Request().Context(),
-		entity.LandingPages{page},
-	); err != nil {
-		return echo.NewHTTPError(
-			http.StatusInternalServerError,
-			err.Error(),
-		)
+	if err := h.landingPageService.Insert(c.Request().Context(), entity.LandingPages{page}); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusCreated, page)
@@ -235,18 +226,13 @@ func (h landingPageHandler) insertLandingPage(c echo.Context) error {
 
 func (h landingPageHandler) updateLandingPages(c echo.Context) error {
 	var pages entity.LandingPages
+
 	if err := c.Bind(&pages); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	if err := h.landingPageService.Update(
-		c.Request().Context(),
-		pages,
-	); err != nil {
-		return echo.NewHTTPError(
-			http.StatusInternalServerError,
-			err.Error(),
-		)
+	if err := h.landingPageService.Update(c.Request().Context(), pages); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, pages)
@@ -259,14 +245,8 @@ func (h landingPageHandler) updateLandingPage(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	if err := h.landingPageService.Update(
-		c.Request().Context(),
-		entity.LandingPages{page},
-	); err != nil {
-		return echo.NewHTTPError(
-			http.StatusInternalServerError,
-			err.Error(),
-		)
+	if err := h.landingPageService.Update(c.Request().Context(), entity.LandingPages{page}); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, page)
@@ -275,14 +255,8 @@ func (h landingPageHandler) updateLandingPage(c echo.Context) error {
 func (h landingPageHandler) softDeleteLandingPage(c echo.Context) error {
 	id := pubEntity.UUID(c.Param("id"))
 
-	if err := h.landingPageService.SoftDelete(
-		c.Request().Context(),
-		id,
-	); err != nil {
-		return echo.NewHTTPError(
-			http.StatusInternalServerError,
-			err.Error(),
-		)
+	if err := h.landingPageService.SoftDelete(c.Request().Context(), id); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(

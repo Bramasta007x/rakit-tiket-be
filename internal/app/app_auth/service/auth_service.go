@@ -32,7 +32,6 @@ func MakeAuthService(log util.LogUtil, sqlDB *sql.DB) AuthService {
 
 func (s authService) Login(ctx context.Context, email, password string) (string, error) {
 	dbTrx := dao.NewTransaction(ctx, s.sqlDB)
-	// Tidak perlu defer Rollback karena hanya SELECT
 
 	users, err := dbTrx.GetUserDAO().Search(ctx, entity.UserQuery{
 		Emails: []string{email},
@@ -41,6 +40,7 @@ func (s authService) Login(ctx context.Context, email, password string) (string,
 	if err != nil {
 		return "", err
 	}
+
 	if len(users) == 0 {
 		return "", fmt.Errorf("invalid email or password")
 	}
@@ -62,7 +62,6 @@ func (s authService) Login(ctx context.Context, email, password string) (string,
 }
 
 func (s authService) generateToken(user entity.UserEntity) (string, error) {
-	// Menggunakan util.BuildJwtSecret yang sudah ada di codebase
 	secretKey := util.BuildJwtSecret("rakit-tiket-app")
 
 	claims := jwt.MapClaims{

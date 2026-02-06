@@ -40,14 +40,8 @@ func (h authHandler) login(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	if err := c.Validate(&req); err != nil {
-		return err
-	}
-
 	token, err := h.authService.Login(c.Request().Context(), req.Email, req.Password)
-
 	if err != nil {
-		// Jangan expose error detail database/bcrypt ke client untuk keamanan
 		return echo.NewHTTPError(http.StatusUnauthorized, "Invalid email or password")
 	}
 
