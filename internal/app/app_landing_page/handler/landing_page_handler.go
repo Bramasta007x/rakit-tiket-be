@@ -183,6 +183,15 @@ func (h landingPageHandler) handleMultipartLandingPage(c echo.Context) error {
 		landingPage.VenueImage = venueFileID // Update struct dengan ID file baru
 	}
 
+	// Proses Upload Logo Image (jika ada)
+	logoFileID, err := processUpload("logo_image_file", "landing_page_logo")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed uploading logo: "+err.Error())
+	}
+	if logoFileID != nil {
+		landingPage.LogoImage = logoFileID // Update struct dengan ID file baru
+	}
+
 	// Simpan Data Landing Page ke DB
 	// Menggunakan Upsert, Insert jika tidak ada data, Update jika ada data
 	var serviceError error

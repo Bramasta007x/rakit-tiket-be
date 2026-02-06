@@ -34,15 +34,38 @@ func (d landingPageDAO) Search(ctx context.Context, query entity.LandingPageQuer
 
 	sqlSelect := sqlgo.NewSQLGoSelect().
 		SetSQLSelect("lp.id", "id").
-		SetSQLSelect("lp.banner_image", "banner_image").
-		SetSQLSelect("lp.venue_image", "venue_image").
-		SetSQLSelect("lp.event_creator", "event_creator").
+		// Event Info
 		SetSQLSelect("lp.event_name", "event_name").
+		SetSQLSelect("lp.event_subtitle", "event_subtitle").
+		SetSQLSelect("lp.event_creator", "event_creator").
 		SetSQLSelect("lp.event_date", "event_date").
 		SetSQLSelect("lp.event_time_start", "event_time_start").
 		SetSQLSelect("lp.event_time_end", "event_time_end").
 		SetSQLSelect("lp.event_location", "event_location").
+		SetSQLSelect("lp.logo_image", "logo_image").
+		// Hero Section
+		SetSQLSelect("lp.hero_id", "hero_id").
+		SetSQLSelect("lp.banner_image", "banner_image").
+		SetSQLSelect("lp.banner_color", "banner_color").
+		SetSQLSelect("lp.hero_button_id", "hero_button_id").
+		SetSQLSelect("lp.hero_button_text", "hero_button_text").
+		SetSQLSelect("lp.hero_button_link", "hero_button_link").
+		// Countdown
+		SetSQLSelect("lp.hero_countdown_id", "hero_countdown_id").
+		SetSQLSelect("lp.hero_countdown_date", "hero_countdown_date").
+		SetSQLSelect("lp.hero_countdown_time_start", "hero_countdown_time_start").
+		SetSQLSelect("lp.hero_countdown_time_end", "hero_countdown_time_end").
+		SetSQLSelect("lp.hero_countdown_after_text", "hero_countdown_after_text").
+		// Venue Section
+		SetSQLSelect("lp.venue_id", "venue_id").
+		SetSQLSelect("lp.venue_image", "venue_image").
+		SetSQLSelect("lp.venue_layout", "venue_layout").
+		SetSQLSelect("lp.venue_address", "venue_address").
+		SetSQLSelect("lp.venue_map_link", "venue_map_link").
+		// JSON Data
 		SetSQLSelect("lp.terms_and_conditions", "terms_and_conditions").
+		SetSQLSelect("lp.faqs", "faqs").
+		// Metadata
 		SetSQLSelect("lp.deleted", "deleted").
 		SetSQLSelect("lp.data_hash", "data_hash").
 		SetSQLSelect("lp.created_at", "created_at").
@@ -81,18 +104,42 @@ func (d landingPageDAO) Search(ctx context.Context, query entity.LandingPageQuer
 	for rows.Next() {
 		var page entity.LandingPage
 		var termsJSON []byte
+		var faqsJSON []byte
 
 		if err := rows.Scan(
 			&page.ID,
-			&page.BannerImage,
-			&page.VenueImage,
-			&page.EventCreator,
+			// Event Info
 			&page.EventName,
+			&page.EventSubtitle,
+			&page.EventCreator,
 			&page.EventDate,
 			&page.EventTimeStart,
 			&page.EventTimeEnd,
 			&page.EventLocation,
+			&page.LogoImage,
+			// Hero Section
+			&page.HeroID,
+			&page.BannerImage,
+			&page.BannerColor,
+			&page.HeroButtonID,
+			&page.HeroButtonText,
+			&page.HeroButtonLink,
+			// Countdown
+			&page.HeroCountdownID,
+			&page.HeroCountdownDate,
+			&page.HeroCountdownTimeStart,
+			&page.HeroCountdownTimeEnd,
+			&page.HeroCountdownAfterText,
+			// Venue Section
+			&page.VenueID,
+			&page.VenueImage,
+			&page.VenueLayout,
+			&page.VenueAddress,
+			&page.VenueMapLink,
+			// JSON Data
 			&termsJSON,
+			&faqsJSON,
+			// Metadata
 			&page.DaoEntity.Deleted,
 			&page.DaoEntity.DataHash,
 			&page.DaoEntity.CreatedAt,
@@ -101,9 +148,17 @@ func (d landingPageDAO) Search(ctx context.Context, query entity.LandingPageQuer
 			return nil, err
 		}
 
+		// Unmarshal Terms
 		if len(termsJSON) > 0 {
 			if err := json.Unmarshal(termsJSON, &page.TermsAndConditions); err != nil {
 				page.TermsAndConditions = []string{}
+			}
+		}
+
+		// Unmarshal FAQs
+		if len(faqsJSON) > 0 {
+			if err := json.Unmarshal(faqsJSON, &page.Faqs); err != nil {
+				page.Faqs = []string{}
 			}
 		}
 
@@ -123,15 +178,38 @@ func (d landingPageDAO) Insert(ctx context.Context, pages entity.LandingPages) e
 		SetSQLInsert("landing_page_configs").
 		SetSQLInsertColumn(
 			"id",
-			"banner_image",
-			"venue_image",
-			"event_creator",
+			// Event
 			"event_name",
+			"event_subtitle",
+			"event_creator",
 			"event_date",
 			"event_time_start",
 			"event_time_end",
 			"event_location",
+			"logo_image",
+			// Hero
+			"hero_id",
+			"banner_image",
+			"banner_color",
+			"hero_button_id",
+			"hero_button_text",
+			"hero_button_link",
+			// Countdown
+			"hero_countdown_id",
+			"hero_countdown_date",
+			"hero_countdown_time_start",
+			"hero_countdown_time_end",
+			"hero_countdown_after_text",
+			// Venue
+			"venue_id",
+			"venue_image",
+			"venue_layout",
+			"venue_address",
+			"venue_map_link",
+			// JSON
 			"terms_and_conditions",
+			"faqs",
+			// Metadata
 			"data_hash",
 			"created_at",
 		)
@@ -143,22 +221,52 @@ func (d landingPageDAO) Insert(ctx context.Context, pages entity.LandingPages) e
 			page.CreatedAt.String(),
 		)
 
+		// Marshal Terms
 		termsJSON, err := json.Marshal(page.TermsAndConditions)
 		if err != nil {
 			termsJSON = []byte("[]")
 		}
 
+		// Marshal FAQs
+		faqsJSON, err := json.Marshal(page.Faqs)
+		if err != nil {
+			faqsJSON = []byte("[]")
+		}
+
 		sqlInsert.SetSQLInsertValue(
 			page.ID,
-			page.BannerImage,
-			page.VenueImage,
-			page.EventCreator,
+			// Event
 			page.EventName,
+			page.EventSubtitle,
+			page.EventCreator,
 			page.EventDate,
 			page.EventTimeStart,
 			page.EventTimeEnd,
 			page.EventLocation,
+			page.LogoImage,
+			// Hero
+			page.HeroID,
+			page.BannerImage,
+			page.BannerColor,
+			page.HeroButtonID,
+			page.HeroButtonText,
+			page.HeroButtonLink,
+			// Countdown
+			page.HeroCountdownID,
+			page.HeroCountdownDate,
+			page.HeroCountdownTimeStart,
+			page.HeroCountdownTimeEnd,
+			page.HeroCountdownAfterText,
+			// Venue
+			page.VenueID,
+			page.VenueImage,
+			page.VenueLayout,
+			page.VenueAddress,
+			page.VenueMapLink,
+			// JSON
 			termsJSON,
+			faqsJSON,
+			// Metadata
 			page.DataHash,
 			page.CreatedAt,
 		)
@@ -191,22 +299,49 @@ func (d landingPageDAO) Update(ctx context.Context, pages entity.LandingPages) e
 
 		termsJSON, err := json.Marshal(page.TermsAndConditions)
 		if err != nil {
-			// Jika gagal, set array kosong default JSON
 			termsJSON = []byte("[]")
+		}
+
+		faqsJSON, err := json.Marshal(page.Faqs)
+		if err != nil {
+			faqsJSON = []byte("[]")
 		}
 
 		sql := sqlgo.NewSQLGo().
 			SetSQLSchema("public").
 			SetSQLUpdate("landing_page_configs").
-			SetSQLUpdateValue("banner_image", page.BannerImage).
-			SetSQLUpdateValue("venue_image", page.VenueImage).
-			SetSQLUpdateValue("event_creator", page.EventCreator).
+			// Event
 			SetSQLUpdateValue("event_name", page.EventName).
+			SetSQLUpdateValue("event_subtitle", page.EventSubtitle).
+			SetSQLUpdateValue("event_creator", page.EventCreator).
 			SetSQLUpdateValue("event_date", page.EventDate).
 			SetSQLUpdateValue("event_time_start", page.EventTimeStart).
 			SetSQLUpdateValue("event_time_end", page.EventTimeEnd).
 			SetSQLUpdateValue("event_location", page.EventLocation).
+			SetSQLUpdateValue("logo_image", page.LogoImage).
+			// Hero
+			SetSQLUpdateValue("hero_id", page.HeroID).
+			SetSQLUpdateValue("banner_image", page.BannerImage).
+			SetSQLUpdateValue("banner_color", page.BannerColor).
+			SetSQLUpdateValue("hero_button_id", page.HeroButtonID).
+			SetSQLUpdateValue("hero_button_text", page.HeroButtonText).
+			SetSQLUpdateValue("hero_button_link", page.HeroButtonLink).
+			// Countdown
+			SetSQLUpdateValue("hero_countdown_id", page.HeroCountdownID).
+			SetSQLUpdateValue("hero_countdown_date", page.HeroCountdownDate).
+			SetSQLUpdateValue("hero_countdown_time_start", page.HeroCountdownTimeStart).
+			SetSQLUpdateValue("hero_countdown_time_end", page.HeroCountdownTimeEnd).
+			SetSQLUpdateValue("hero_countdown_after_text", page.HeroCountdownAfterText).
+			// Venue
+			SetSQLUpdateValue("venue_id", page.VenueID).
+			SetSQLUpdateValue("venue_image", page.VenueImage).
+			SetSQLUpdateValue("venue_layout", page.VenueLayout).
+			SetSQLUpdateValue("venue_address", page.VenueAddress).
+			SetSQLUpdateValue("venue_map_link", page.VenueMapLink).
+			// JSON
 			SetSQLUpdateValue("terms_and_conditions", termsJSON).
+			SetSQLUpdateValue("faqs", faqsJSON).
+			// Metadata
 			SetSQLUpdateValue("data_hash", page.DataHash).
 			SetSQLUpdateValue("updated_at", page.UpdatedAt).
 			SetSQLWhere("AND", "id", "=", page.ID)
