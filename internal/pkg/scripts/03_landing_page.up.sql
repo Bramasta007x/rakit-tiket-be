@@ -34,7 +34,9 @@ CREATE TABLE landing_page_configs (
     venue_image varchar NULL,           
     venue_layout varchar NULL,         
     venue_address varchar NULL,        
-    venue_map_link varchar NULL,       
+    venue_map_link varchar NULL, 
+    venue_google varchar NULL,      
+     
 
     -- JSON Data
     terms_and_conditions jsonb NOT NULL DEFAULT '[]'::jsonb,

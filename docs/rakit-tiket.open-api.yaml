@@ -367,6 +367,7 @@ components:
         venue_layout: { type: string, example: "IMAGE_FILE" }
         venue_address: { type: string, example: "Jl. Raya Jayapura No. 123" }
         venue_map_link: { type: string, example: "https://google.com" }
+        venue_google: { type: string, example: "https://google.com/venue" }
 
         # --- Terms & Conditions ---
         terms_and_conditions:

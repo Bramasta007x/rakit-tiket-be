@@ -44,6 +44,7 @@ type (
 		VenueLayout  *string `json:"venue_layout"`
 		VenueAddress *string `json:"venue_address"`
 		VenueMapLink *string `json:"venue_map_link"`
+		VenueGoogle  *string `json:"venue_google"`
 
 		TermsAndConditions []string `json:"terms_and_conditions"`
 		Faqs               []string `json:"faqs"`
