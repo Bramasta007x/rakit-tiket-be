@@ -5,7 +5,6 @@ services:
     container_name: rakit-tiket-db
     restart: always
     environment:
-      # Docker mengambil nilai dari file .env di folder yang sama
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASS}
       POSTGRES_DB: ${DB_DATABASE}
@@ -13,6 +12,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    # TAMBAHAN 1: Healthcheck untuk memastikan Postgres benar-benar siap
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_DATABASE}"]
       interval: 5s
@@ -26,11 +26,11 @@ services:
     restart: always
     ports:
       - "${PORT}:${PORT}"
+    # TAMBAHAN 2: Ubah depends_on menjadi format panjang (condition)
     depends_on:
       db:
         condition: service_healthy
     environment:
-      # Aplikasi Go butuh tahu host DB adalah nama service ("db")
       DB_HOST: db
       DB_PORT: 5432
       DB_USER: ${DB_USER}
@@ -55,7 +55,7 @@ services:
     image: swaggerapi/swagger-ui
     container_name: rakit-tiket-swagger
     ports:
-      - "8081:8080" # Akses Swagger di port 8081
+      - "8081:8080"
     environment:
       SWAGGER_JSON: /docs/rakit-tiket.open-api.yaml
     volumes:
