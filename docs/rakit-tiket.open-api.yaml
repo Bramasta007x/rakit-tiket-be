@@ -7,7 +7,7 @@ info:
     - Added Upsert (Multipart/JSON) capability for Admin Landing Page
 
 servers:
-  - url: https://api.rakittiket.com/api/v1
+  - url: https://api.rakittiket.tech/api/v1
     description: Production server
   - url: http://212.85.24.75:8080/api/v1
     description: Local development
