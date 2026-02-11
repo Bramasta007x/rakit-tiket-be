@@ -14,6 +14,9 @@ import (
 	landingPageHandler "rakit-tiket-be/internal/app/app_landing_page/handler"
 	landingPageService "rakit-tiket-be/internal/app/app_landing_page/service"
 
+	ticketHandler "rakit-tiket-be/internal/app/app_ticket/handler"
+	ticketService "rakit-tiket-be/internal/app/app_ticket/service"
+
 	"rakit-tiket-be/internal/pkg/client"
 	"rakit-tiket-be/internal/pkg/middleware"
 	"rakit-tiket-be/pkg/constant"
@@ -53,11 +56,13 @@ func main() {
 	landingPageService := landingPageService.MakeLandingPageService(sqlDB)
 	fileService := fileService.MakeFileService(log, sqlDB)
 	authSvc := authService.MakeAuthService(log, sqlDB)
+	ticketSvc := ticketService.MakeTicketService(sqlDB)
 
 	// Handlers / Adapters
 	landingPageAdapter := landingPageHandler.MakeHttpAdapter(landingPageService, fileService, authMiddleware)
 	fileAdapter := fileHandler.MakeFileAdapter(log, fileService)
 	authAdapter := authHandler.MakeHttpAdapter(log, authSvc)
+	ticketAdapter := ticketHandler.MakeHttpAdapter(ticketSvc, authMiddleware)
 
 	// Register Routes
 	apiGroup := e.Group("/api")
@@ -65,6 +70,7 @@ func main() {
 	landingPageAdapter.RegisterRoute(apiGroup)
 	fileAdapter.RegisterRouter(apiGroup)
 	authAdapter.RegisterRoute(apiGroup)
+	ticketAdapter.RegisterRoute(apiGroup)
 
 	// Start Server
 	port := envgo.GetString("PORT", "8000")
