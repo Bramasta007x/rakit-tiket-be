@@ -4,12 +4,18 @@ info:
   version: 1.2.0
   description: |
     API versi **1.2**
-    - Added Upsert (Multipart/JSON) capability for Admin Landing Page
-
+    - Grouped Admin Auth
+    - Grouped Admin Dashboard
+    - Grouped Admin Landing Page CRUD
+    - Grouped Admin Ticket CRUD
+    - Grouped Admin Participant
+    
 servers:
   - url: https://api.rakittiket.tech/api/v1
     description: Production server
-  - url: http://212.85.24.75:8080/api/v1
+  - url: http://localhost:8000/api/v1/admin
+    description: Local Admin development
+  - url: http://localhost:8000/api/v1
     description: Local development
 
 tags:
@@ -17,8 +23,16 @@ tags:
     description: Endpoint publik (landing page, registrasi, order status)
   - name: Payment
     description: Integrasi Midtrans webhook & pengecekan status
-  - name: Admin
-    description: Endpoint dashboard admin (auth required)
+  - name: Admin - Auth
+    description: Admin Authentication (Login)
+  - name: Admin - Dashboard
+    description: Admin Dashboard (Summary & Sales Stats)
+  - name: Admin - Participants
+    description: Admin Participant (List & Filter)
+  - name: Admin - Landing Page
+    description: Admin Landing Page (CRUD)
+  - name: Admin - Tickets
+    description: Admin Ticket (CRUD)
 
 paths:
   # --------------------------------------------------------------------------
@@ -121,11 +135,11 @@ paths:
           $ref: "#/components/responses/NotFound"
 
   # --------------------------------------------------------------------------
-  # ADMIN ENDPOINTS
+  # ADMIN AUTH ENDPOINTS
   # --------------------------------------------------------------------------
   /admin/login:
     post:
-      tags: [Admin]
+      tags: [Admin - Auth]
       summary: Login admin
       requestBody:
         required: true
@@ -134,8 +148,8 @@ paths:
             schema:
               type: object
               properties:
-                email: { type: string, format: email }
-                password: { type: string }
+                email: { type: string, format: email, example: "admin@rakittiket.tech" }
+                password: { type: string, example: "password123" }
       responses:
         "200":
           description: Login berhasil
@@ -147,56 +161,91 @@ paths:
                     token: "jwt_token_here"
                     token_type: "bearer"
 
+  # --------------------------------------------------------------------------
+  # ADMIN DASHBOARD ENDPOINTS
+  # --------------------------------------------------------------------------
   /admin/dashboard/summary:
     get:
-      tags: [Admin]
+      tags: [Admin - Dashboard]
       summary: Statistik utama dashboard
+      description: Mengambil ringkasan total pendapatan, total tiket terjual, dll.
       security: [{ bearerAuth: [] }]
       responses:
         "200":
-          description: Statistik utama
+          description: Statistik utama berhasil diambil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
 
   /admin/dashboard/daily-sales:
     get:
-      tags: [Admin]
+      tags: [Admin - Dashboard]
       summary: Statistik penjualan harian
+      description: Mengambil data penjualan per hari untuk grafik.
       security: [{ bearerAuth: [] }]
       responses:
         "200":
-          description: Data penjualan harian
+          description: Data penjualan harian berhasil diambil
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DailySalesData"
 
+  # --------------------------------------------------------------------------
+  # ADMIN PARTICIPANTS (GROUP)
+  # --------------------------------------------------------------------------
   /admin/participants/summary:
     get:
-      tags: [Admin]
+      tags: [Admin - Participants]
       summary: Statistik peserta & pembayaran
       security: [{ bearerAuth: [] }]
       responses:
         "200":
-          description: Statistik peserta
+          description: Statistik peserta berhasil diambil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParticipantSummary"
 
   /admin/participants:
     get:
-      tags: [Admin]
+      tags: [Admin - Participants]
       summary: Daftar peserta dengan filter
+      description: Mengambil daftar peserta yang sudah mendaftar/membayar dengan filter opsional.
       security: [{ bearerAuth: [] }]
       parameters:
         - in: query
           name: ticket_types[]
           schema: { type: array, items: { type: string } }
+          description: Filter berdasarkan ID jenis tiket
         - in: query
           name: payment_status[]
-          schema: { type: array, items: { type: string } }
+          schema: { type: array, items: { type: string, enum: [pending, paid, expired] } }
+          description: Filter berdasarkan status pembayaran
+        - in: query
+          name: search
+          schema: { type: string }
+          description: Cari nama atau email peserta
       responses:
         "200":
-          description: Daftar peserta
+          description: Daftar peserta berhasil diambil
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Participant"
 
   # --------------------------------------------------------------------------
-  # ADMIN LANDING PAGE (UPSERT)
+  # ADMIN LANDING PAGE (CRUD GROUP)
   # --------------------------------------------------------------------------
   /admin/landing-page:
     get:
-      tags: [Admin]
-      summary: Lihat konfigurasi landing page (View Admin)
+      tags: [Admin - Landing Page]
+      summary: Read konfigurasi landing page 
       security: [{ bearerAuth: [] }]
       responses:
         "200":
@@ -207,12 +256,12 @@ paths:
                 $ref: "#/components/schemas/LandingPageSettingsInput"
 
     post:
-      tags: [Admin]
+      tags: [Admin - Landing Page]
       summary: Create Landing Page (Upsert Logic)
       description: |
         Membuat konfigurasi baru.
-        - Jika menggunakan **JSON**, hanya data teks yang disimpan.
-        - Jika menggunakan **Multipart**, data JSON dikirim dalam field `data` string, dan file dikirim terpisah.
+        - Jika menggunakan **JSON**, kirim body raw JSON biasa.
+        - Jika menggunakan **Multipart**, kirim field `data` (JSON Object) dan file terpisah.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -237,11 +286,10 @@ paths:
           description: Invalid Input / JSON Format Error
 
     put:
-      tags: [Admin]
+      tags: [Admin - Landing Page]
       summary: Update Landing Page (Upsert Logic)
       description: |
         Mengupdate konfigurasi. Logic sama dengan POST (Upsert).
-        ID bisa dikirim di dalam body JSON atau parameter URL (opsional).
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -263,13 +311,150 @@ paths:
               schema:
                 $ref: "#/components/schemas/LandingPageSettingsInput"
 
+  /admin/landing-page/{id}:
     delete:
-      tags: [Admin]
-      summary: Reset konfigurasi landing page
+      tags: [Admin - Landing Page]
+      summary: Delete Landing Page
       security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: UUID dari Landing Page yang ingin dihapus
       responses:
         "200":
           description: Konfigurasi di-reset
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+
+  # --------------------------------------------------------------------------
+  # ADMIN TICKETS (CRUD GROUP)
+  # --------------------------------------------------------------------------
+  /admin/tickets:
+    post:
+      tags: [Admin - Tickets]
+      summary: Insert Tickets (Bulk)
+      description: Create ticket baru. Kirim array object ticket.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/TicketInput"
+      responses:
+        "201":
+          description: Tiket berhasil dibuat
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Ticket"
+
+
+  /admin/ticket:
+    post:
+      tags: [Admin - Tickets]
+      summary: Insert Ticket (Single)
+      description: Create ticket baru. Kirim array object ticket (tanpa ID).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/TicketInput"
+      responses:
+        "201":
+          description: Tiket berhasil dibuat
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Ticket"
+
+    put:
+      tags: [Admin - Tickets]
+      summary: Update Tickets (Bulk)
+      description: Update multiple tiket sekaligus. Wajib kirim ID di dalam body.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/Ticket"
+      responses:
+        "200":
+          description: Tiket berhasil diupdate
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Ticket"
+
+  /admin/ticket/{id}:
+    put:
+      tags: [Admin - Tickets]
+      summary: Update Single Ticket
+      description: Update satu tiket berdasarkan ID di URL. Body tidak perlu ID.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          schema: { type: string, format: uuid }
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TicketInput"
+      responses:
+        "200":
+          description: Tiket berhasil diupdate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+
+    delete:
+      tags: [Admin - Tickets]
+      summary: Soft Delete Ticket
+      description: Menghapus tiket (Soft Delete)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          schema: { type: string, format: uuid }
+          required: true
+      responses:
+        "200":
+          description: Tiket berhasil dihapus
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Ticket deleted successfully"
 
 components:
   securitySchemes:
@@ -298,6 +483,60 @@ components:
         price: { type: number }
         total: { type: integer }
         remaining: { type: integer }
+    
+    TicketInput:
+      type: object
+      required: [code, title, price, total]
+      properties:
+        code: { type: string, example: "PRESALE-1" }
+        title: { type: string, example: "Presale Ticket" }
+        price: { type: number, example: 150000 }
+        total: { type: integer, example: 100 }
+        remaining: { type: integer, example: 100 }
+
+    # ---------------- Dashboard Schemas (New) ----------------
+    DashboardSummary:
+      type: object
+      properties:
+        total_revenue: { type: number, example: 50000000 }
+        total_tickets_sold: { type: integer, example: 120 }
+        total_check_in: { type: integer, example: 45 }
+        total_participants: { type: integer, example: 150 }
+    
+    DailySalesData:
+      type: object
+      properties:
+        date: { type: string, format: date, example: "2026-02-14" }
+        total_sales: { type: number, example: 1500000 }
+        ticket_count: { type: integer, example: 10 }
+
+    # ---------------- Participant Schemas ----------------
+    Participant:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: "John Doe" }
+        email: { type: string, format: email, example: "john@example.com" }
+        phone: { type: string, example: "08123456789" }
+        ticket_code: { type: string, example: "PRESALE-1" }
+        ticket_title: { type: string, example: "Presale Ticket" }
+        payment_status: { type: string, enum: [paid, pending, expired], example: "paid" }
+        check_in_status: { type: boolean, example: false }
+        registered_at: { type: string, format: date-time }
+
+    ParticipantSummary:
+      type: object
+      properties:
+        total_participants: { type: integer, example: 150 }
+        checked_in: { type: integer, example: 50 }
+        total_revenue: { type: number, example: 22500000 }
+        chart_data: 
+          type: array
+          items:
+             type: object
+             properties:
+                date: { type: string, format: date }
+                count: { type: integer }
 
     RegistrantInput:
       type: object
@@ -344,11 +583,11 @@ components:
         event_time_start: { type: string, example: "13:30" }
         event_time_end: { type: string, example: "17:30" }
         event_location: { type: string, example: "Istora Papua, Jayapura" }
-        logo_image: { type: string, example: "IMAGE_FILE" }
+        logo_image: { type: string, description: "Nama file atau URL logo", example: "logo_v1.png" }
 
         # --- Hero Section ---
         hero_id: { type: string, example: "hero_1" }
-        banner_image: { type: string, example: "IMAGE_FILE" }
+        banner_image: { type: string, description: "Nama file atau URL banner", example: "banner_main.jpg" }
         banner_color: { type: string, example: "#000000" }
         hero_button_id: { type: string, example: "hero_button_1" }
         hero_button_text: { type: string, example: "Beli Tiket Sekarang" }
@@ -363,8 +602,8 @@ components:
 
         # --- Venue Section ---
         venue_id: { type: string, example: "venue_1" }
-        venue_image: { type: string, example: "IMAGE_FILE" }
-        venue_layout: { type: string, example: "IMAGE_FILE" }
+        venue_image: { type: string, description: "Nama file atau URL venue", example: "venue_photo.jpg" }
+        venue_layout: { type: string, description: "Nama file atau URL layout", example: "layout_seat.jpg" }
         venue_address: { type: string, example: "Jl. Raya Jayapura No. 123" }
         venue_map_link: { type: string, example: "https://google.com" }
         venue_google: { type: string, example: "https://google.com/venue" }
@@ -389,23 +628,25 @@ components:
               question: { type: string, example: "Boleh bawa makanan?" }
               answer: { type: string, example: "Tidak boleh." }
         
-    # 2. Schema untuk Multipart Form Data (File + JSON String)
+    # 2. Schema untuk Multipart Form Data
     LandingPageMultipartInput:
       type: object
       properties:
         data:
+          type: object
           description: |
-            JSON String yang berisi data konfigurasi (sesuai schema LandingPageSettingsInput).
-            Backend akan melakukan `json.Unmarshal` pada field ini.
-          $ref: "#/components/schemas/LandingPageSettingsInput"
+            JSON Object data konfigurasi.
+            (Pastikan content-type part ini diset application/json)
+          allOf:
+            - $ref: "#/components/schemas/LandingPageSettingsInput"
         banner_image_file:
           type: string
           format: binary
-          description: File gambar banner (optional)
+          description: Upload file baru untuk banner (optional)
         venue_image_file:
           type: string
           format: binary
-          description: File gambar venue (optional)
+          description: Upload file baru untuk venue (optional)
 
     # 3. Schema untuk Public View (Gabungan setting + data dinamis lain)
     LandingPageConfig:
