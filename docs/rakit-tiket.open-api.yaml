@@ -7,7 +7,7 @@ info:
     - Added Upsert (Multipart/JSON) capability for Admin Landing Page
 
 servers:
-  - url: https://api.rakittiket.com/api/v1
+  - url: https://api.rakittiket.tech/api/v1
     description: Production server
   - url: http://212.85.24.75:8080/api/v1
     description: Local development
@@ -367,6 +367,7 @@ components:
         venue_layout: { type: string, example: "IMAGE_FILE" }
         venue_address: { type: string, example: "Jl. Raya Jayapura No. 123" }
         venue_map_link: { type: string, example: "https://google.com" }
+        venue_google: { type: string, example: "https://google.com/venue" }
 
         # --- Terms & Conditions ---
         terms_and_conditions:

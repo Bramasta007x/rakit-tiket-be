@@ -62,6 +62,7 @@ func (d landingPageDAO) Search(ctx context.Context, query entity.LandingPageQuer
 		SetSQLSelect("lp.venue_layout", "venue_layout").
 		SetSQLSelect("lp.venue_address", "venue_address").
 		SetSQLSelect("lp.venue_map_link", "venue_map_link").
+		SetSQLSelect("lp.venue_google", "venue_google").
 		// JSON Data
 		SetSQLSelect("lp.terms_and_conditions", "terms_and_conditions").
 		SetSQLSelect("lp.faqs", "faqs").
@@ -136,6 +137,7 @@ func (d landingPageDAO) Search(ctx context.Context, query entity.LandingPageQuer
 			&page.VenueLayout,
 			&page.VenueAddress,
 			&page.VenueMapLink,
+			&page.VenueGoogle,
 			// JSON Data
 			&termsJSON,
 			&faqsJSON,
@@ -206,6 +208,7 @@ func (d landingPageDAO) Insert(ctx context.Context, pages entity.LandingPages) e
 			"venue_layout",
 			"venue_address",
 			"venue_map_link",
+			"venue_google",
 			// JSON
 			"terms_and_conditions",
 			"faqs",
@@ -263,6 +266,7 @@ func (d landingPageDAO) Insert(ctx context.Context, pages entity.LandingPages) e
 			page.VenueLayout,
 			page.VenueAddress,
 			page.VenueMapLink,
+			page.VenueGoogle,
 			// JSON
 			termsJSON,
 			faqsJSON,
@@ -338,6 +342,7 @@ func (d landingPageDAO) Update(ctx context.Context, pages entity.LandingPages) e
 			SetSQLUpdateValue("venue_layout", page.VenueLayout).
 			SetSQLUpdateValue("venue_address", page.VenueAddress).
 			SetSQLUpdateValue("venue_map_link", page.VenueMapLink).
+			SetSQLUpdateValue("venue_google", page.VenueGoogle).
 			// JSON
 			SetSQLUpdateValue("terms_and_conditions", termsJSON).
 			SetSQLUpdateValue("faqs", faqsJSON).
