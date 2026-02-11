@@ -37,8 +37,9 @@ func MakeLandingPageHandler(landingPageService service.LandingPageService, fileS
 
 func (h landingPageHandler) RegisterRouter(g *echo.Group) {
 	restricted := g.Group("/v1/admin")
+	restrictedPublic := g.Group("/v1")
 
-	restricted.GET("/landing-pages", h.searchLandingPages)
+	restrictedPublic.GET("/landing-pages", h.searchLandingPages)
 
 	restricted.Use(h.middleware.VerifyToken)
 	restricted.Use(h.middleware.RequireAdmin)

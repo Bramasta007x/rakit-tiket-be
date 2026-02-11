@@ -32,8 +32,9 @@ func MakeTicketHandler(
 
 func (h ticketHandler) RegisterRouter(g *echo.Group) {
 	restricted := g.Group("/v1/admin")
+	restrictedPublic := g.Group("/v1")
 
-	restricted.GET("/tickets", h.searchTickets)
+	restrictedPublic.GET("/tickets", h.searchTickets)
 
 	restricted.Use(h.middleware.VerifyToken)
 	restricted.Use(h.middleware.RequireAdmin)
