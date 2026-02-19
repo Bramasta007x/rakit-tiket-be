@@ -25,7 +25,7 @@ type dbTransaction struct {
 	orderDAO      orderDao.OrderDAO
 }
 
-func NewTransactionRegistrant(ctx context.Context, sqlDB *sql.DB) DBTransaction {
+func NewTransaction(ctx context.Context, sqlDB *sql.DB) DBTransaction {
 	dbTrx := &dbTransaction{
 		DBTransaction: dao.NewTransaction(ctx, sqlDB),
 	}
