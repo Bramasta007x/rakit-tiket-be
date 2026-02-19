@@ -21,10 +21,10 @@ func SecureOptions() secure.Options {
 
 func CorsOptions(clientOriginUrl string) cors.Options {
 	return cors.Options{
-		AllowedOrigins: []string{clientOriginUrl},
-		AllowedMethods: []string{"GET"},
-		AllowedHeaders: []string{"Content-Type", "Authorization"},
-		MaxAge:         86400,
+		AllowedOrigins:   []string{clientOriginUrl},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization"},
+		MaxAge:           86400,
+		AllowCredentials: true,
 	}
 }
-																													

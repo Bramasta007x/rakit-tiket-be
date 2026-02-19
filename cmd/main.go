@@ -17,12 +17,14 @@ import (
 	ticketHandler "rakit-tiket-be/internal/app/app_ticket/handler"
 	ticketService "rakit-tiket-be/internal/app/app_ticket/service"
 
+	"rakit-tiket-be/config"
 	"rakit-tiket-be/internal/pkg/client"
 	"rakit-tiket-be/internal/pkg/middleware"
 	"rakit-tiket-be/pkg/constant"
 	"rakit-tiket-be/pkg/util"
 
 	"github.com/labstack/echo/v4"
+	"github.com/rs/cors"
 	"gitlab.com/threetopia/envgo"
 )
 
@@ -48,6 +50,12 @@ func main() {
 
 	// HTTP Server
 	e := echo.New()
+
+	clientOrigin := envgo.GetString("CLIENT_ORIGIN_URL", "*")
+
+	corsOptions := config.CorsOptions(clientOrigin)
+
+	e.Use(echo.WrapMiddleware(cors.New(corsOptions).Handler))
 
 	// Middleware
 	authMiddleware := middleware.MakeAuthMiddleware(log)
