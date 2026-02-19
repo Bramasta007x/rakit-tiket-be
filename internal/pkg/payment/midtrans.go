@@ -1,10 +1,9 @@
-package midtrans
+package payment
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"rakit-tiket-be/internal/pkg/payment"
 
 	"github.com/midtrans/midtrans-go"
 	"github.com/midtrans/midtrans-go/coreapi"
@@ -16,7 +15,7 @@ type midtransProvider struct {
 	coreClient coreapi.Client
 }
 
-func NewMidtransProvider(serverKey string, isProduction bool) payment.Provider {
+func NewMidtransProvider(serverKey string, isProduction bool) Provider {
 	var env midtrans.EnvironmentType = midtrans.Sandbox
 	if isProduction {
 		env = midtrans.Production
@@ -35,7 +34,7 @@ func NewMidtransProvider(serverKey string, isProduction bool) payment.Provider {
 }
 
 // Implementasi fungsi CreateTransaction dari interface Provider
-func (m *midtransProvider) CreateTransaction(ctx context.Context, req payment.CreateTransactionRequest) (*payment.CreateTransactionResponse, error) {
+func (m *midtransProvider) CreateTransaction(ctx context.Context, req CreateTransactionRequest) (*CreateTransactionResponse, error) {
 
 	// Mapping dari Format Universal ke Format Midtrans
 	midtransItems := []midtrans.ItemDetails{}
@@ -68,14 +67,14 @@ func (m *midtransProvider) CreateTransaction(ctx context.Context, req payment.Cr
 	}
 
 	// Mapping balik ke format universal
-	return &payment.CreateTransactionResponse{
+	return &CreateTransactionResponse{
 		Token:       snapResp.Token,
 		RedirectURL: snapResp.RedirectURL,
 	}, nil
 }
 
 // Implementasi fungsi Webhook
-func (m *midtransProvider) ParseWebhook(ctx context.Context, payload []byte) (*payment.WebhookNotification, error) {
+func (m *midtransProvider) ParseWebhook(ctx context.Context, payload []byte) (*WebhookNotification, error) {
 	var notif map[string]interface{}
 	if err := json.Unmarshal(payload, notif); err != nil {
 		return nil, err
@@ -102,12 +101,12 @@ func (m *midtransProvider) ParseWebhook(ctx context.Context, payload []byte) (*p
 
 	rawPayload, _ := json.Marshal(notif)
 
-	return &payment.WebhookNotification{
+	return &WebhookNotification{
 		OrderID:       orderID,
 		TransactionID: transactionID,
 		PaymentStatus: mappedStatus,
 		PaymentType:   paymentType,
-		Gateway:       payment.GatewayMidtrans,
+		Gateway:       GatewayMidtrans,
 		RawPayload:    string(rawPayload),
 	}, nil
 }

@@ -2,7 +2,6 @@ package payment
 
 import (
 	"fmt"
-	"rakit-tiket-be/internal/pkg/payment/midtrans"
 )
 
 type PaymentFactory struct {
@@ -21,7 +20,7 @@ func NewPaymentFactory(midtransServerKey string, isProd bool) *PaymentFactory {
 func (f *PaymentFactory) GetProvider(gateway GatewayType) (Provider, error) {
 	switch gateway {
 	case GatewayMidtrans:
-		return midtrans.NewMidtransProvider(f.midtransServerKey, f.isProduction), nil
+		return NewMidtransProvider(f.midtransServerKey, f.isProduction), nil
 	// case GatewayXendit:
 	//	return xendit_gateway.NewXenditProvider(...), nil
 	default:
