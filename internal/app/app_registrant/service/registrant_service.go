@@ -5,119 +5,111 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"math/rand"
 	"time"
 
 	"rakit-tiket-be/internal/app/app_registrant/dao"
-	ticketDao "rakit-tiket-be/internal/app/app_ticket/dao"
 	"rakit-tiket-be/internal/pkg/payment"
-
+	pubEntity "rakit-tiket-be/pkg/entity"
 	orderEntity "rakit-tiket-be/pkg/entity/app_order"
 	regEntity "rakit-tiket-be/pkg/entity/app_registrant"
 	ticketEntity "rakit-tiket-be/pkg/entity/app_ticket"
-	"rakit-tiket-be/pkg/model/app_registrant"
-	"rakit-tiket-be/pkg/util"
-
-	"go.uber.org/zap"
+	model "rakit-tiket-be/pkg/model/app_registrant"
 )
 
 type RegistrantService interface {
-	Register(ctx context.Context, req app_registrant.RegisterRequest) (*app_registrant.RegisterResponse, error)
+	Register(ctx context.Context, req model.RegisterRequest) (*model.RegisterResponse, error)
 }
 
 type registrantService struct {
-	log            util.LogUtil
 	sqlDB          *sql.DB
-	ticketDao      ticketDao.TicketDAO
 	paymentFactory *payment.PaymentFactory
 }
 
-func MakeRegistrantService(log util.LogUtil, sqlDB *sql.DB, ticketDao ticketDao.TicketDAO, paymentFactory *payment.PaymentFactory) RegistrantService {
-	return &registrantService{
-		log:            log,
+func MakeRegistrantService(sqlDB *sql.DB, paymentFactory *payment.PaymentFactory) RegistrantService {
+	return registrantService{
 		sqlDB:          sqlDB,
-		ticketDao:      ticketDao,
 		paymentFactory: paymentFactory,
 	}
 }
 
-func (s *registrantService) Register(ctx context.Context, req app_registrant.RegisterRequest) (*app_registrant.RegisterResponse, error) {
-	dbTrx := dao.NewTransaction(ctx, s.sqlDB)
-	defer dbTrx.GetSqlTx().Rollback()
-
-	// 1. Validasi Maksimal 4 Tiket
-	if 1+len(req.Attendees) > 4 {
+func (s registrantService) Register(ctx context.Context, req model.RegisterRequest) (*model.RegisterResponse, error) {
+	// 1. Validasi Maksimal Tiket
+	totalRequestedTickets := 1 + len(req.Attendees)
+	if totalRequestedTickets > 4 {
 		return nil, errors.New("maksimal 4 tiket per registrasi (termasuk registrant)")
 	}
 
-	// 2. Kumpulkan semua Ticket IDs yang dibeli untuk validasi DB
+	// 2. Hitung Kebutuhan Kuantitas Per Jenis Tiket (Grouping)
+	ticketQtyMap := make(map[string]int)
+	ticketQtyMap[string(req.Registrant.TicketID)]++
 	var ticketIDs []string
 	ticketIDs = append(ticketIDs, string(req.Registrant.TicketID))
+
 	for _, att := range req.Attendees {
+		ticketQtyMap[string(att.TicketID)]++
 		ticketIDs = append(ticketIDs, string(att.TicketID))
 	}
 
-	// 3. Fetch Tickets dari DB
-	tickets, err := s.ticketDao.Search(ctx, ticketEntity.TicketQuery{IDs: ticketIDs})
+	// 3. Memulai Database Transaction sesuai Pattern Arsitektur
+	dbTrx := dao.NewTransaction(ctx, s.sqlDB)
+	defer dbTrx.GetSqlTx().Rollback() // Akan di-rollback jika fungsi berakhir sebelum Commit()
+
+	// 4. Fetch Master Data Tickets
+	tickets, err := dbTrx.GetTicketDAO().Search(ctx, ticketEntity.TicketQuery{IDs: ticketIDs})
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch tickets: %v", err)
 	}
 
-	// Buat Map untuk mempercepat pencarian tiket
 	ticketMap := make(map[string]ticketEntity.Ticket)
 	for _, t := range tickets {
 		ticketMap[string(t.ID)] = t
 	}
 
-	// 4. Hitung Total Cost & Validasi Stok Tersisa
+	// 5. Atomic Stock Validation & Deduction (Mencegah Race Condition/Overselling)
 	var totalCost float64
-	var ticketsInvolved []ticketEntity.Ticket
+	var paymentItems []payment.Item
 
-	// Cek tiket registrant
-	regTicket, exists := ticketMap[string(req.Registrant.TicketID)]
-	if !exists {
-		return nil, fmt.Errorf("tiket dengan ID %s tidak ditemukan", req.Registrant.TicketID)
-	}
-	if regTicket.Remaining <= 0 {
-		return nil, fmt.Errorf("tiket %s sudah habis", regTicket.Title)
-	}
-	totalCost += regTicket.Price
-	ticketsInvolved = append(ticketsInvolved, regTicket)
-
-	// Cek tiket attendees
-	for _, att := range req.Attendees {
-		t, exists := ticketMap[string(att.TicketID)]
+	for ticketIDStr, requestedQty := range ticketQtyMap {
+		ticketData, exists := ticketMap[ticketIDStr]
 		if !exists {
-			return nil, fmt.Errorf("tiket dengan ID %s tidak ditemukan", att.TicketID)
+			return nil, fmt.Errorf("tiket dengan ID %s tidak valid", ticketIDStr)
 		}
-		if t.Remaining <= 0 {
-			return nil, fmt.Errorf("tiket %s sudah habis", t.Title)
+
+		// Eksekusi potong stok langsung di DB secara atomic
+		err := dbTrx.GetTicketDAO().DecreaseRemaining(ctx, pubEntity.UUID(ticketIDStr), requestedQty)
+		if err != nil {
+			return nil, fmt.Errorf("gagal memproses tiket %s: %v", ticketData.Title, err)
 		}
-		totalCost += t.Price
-		ticketsInvolved = append(ticketsInvolved, t)
+
+		// Kalkulasi Harga & Mapping untuk Midtrans
+		totalCost += ticketData.Price * float64(requestedQty)
+		paymentItems = append(paymentItems, payment.Item{
+			ID:       string(ticketData.ID),
+			Name:     ticketData.Title,
+			Price:    ticketData.Price,
+			Quantity: requestedQty,
+		})
 	}
 
-	totalTickets := len(ticketsInvolved)
+	// 6. Generate Relation IDs & Unique Codes di Service Layer
+	now := time.Now()
+	// Gunakan pubEntity.MakeUUID atau util generator sesuai preferensimu
+	registrantID := pubEntity.MakeUUID(req.Registrant.Email, req.Registrant.Name, now.String())
+	orderID := pubEntity.MakeUUID("ORDER", req.Registrant.Email, now.String())
 
-	// 5. Generate Codes
-	year := time.Now().Year()
-	rand.Seed(time.Now().UnixNano())
-	randomNum := rand.Intn(99999) + 1
+	// Format: JMF-2026-00123
+	uniqueCode := fmt.Sprintf("JMF-%d-%s", now.Year(), "TEST")
+	orderNumber := fmt.Sprintf("JMF%d-%s", now.Year(), "TEST")
 
-	// Contoh: JMF-2026-00123
-	uniqueCode := fmt.Sprintf("JMF-%d-%05d", year, randomNum)
-	// Contoh: JMF2026-00123
-	orderNumber := fmt.Sprintf("JMF%d-%05d", year, randomNum)
-
-	// Parse Birthdate
 	var regBirthdate *time.Time
 	if req.Registrant.Birthdate != nil && *req.Registrant.Birthdate != "" {
 		t, _ := time.Parse("2006-01-02", *req.Registrant.Birthdate)
 		regBirthdate = &t
 	}
 
-	// 6. Insert Registrant
+	// 7. Siapkan dan Insert Data Registrant
 	registrant := regEntity.Registrant{
+		ID:           registrantID,
 		UniqueCode:   uniqueCode,
 		TicketID:     &req.Registrant.TicketID,
 		Name:         req.Registrant.Name,
@@ -126,19 +118,16 @@ func (s *registrantService) Register(ctx context.Context, req app_registrant.Reg
 		Gender:       req.Registrant.Gender,
 		Birthdate:    regBirthdate,
 		TotalCost:    totalCost,
-		TotalTickets: totalTickets,
+		TotalTickets: totalRequestedTickets,
 		Status:       "pending",
 	}
-	err = dbTrx.GetRegistrantDAO().Insert(ctx, []regEntity.Registrant{registrant})
-	if err != nil {
-		return nil, err
-	}
-	// Ambil ID Registrant yang baru digenerate (di DAO Insert kita men-set ID-nya)
-	// Idealnya method Insert DAO mengembalikan array registrant yang sudah ada ID-nya,
-	// Jika tidak, kamu harus fetch lagi atau pastikan logic generate ID di DAO menempel pada object reference.
-	// Asumsi logic DAO-mu mengupdate struct asli by pointer/index array.
+	registrant.CreatedAt = now
 
-	// 7. Insert Attendees
+	if err := dbTrx.GetRegistrantDAO().Insert(ctx, []regEntity.Registrant{registrant}); err != nil {
+		return nil, fmt.Errorf("failed to insert registrant: %v", err)
+	}
+
+	// 8. Siapkan dan Insert Data Attendees
 	var attendees []regEntity.Attendee
 	for _, att := range req.Attendees {
 		var attBirthdate *time.Time
@@ -148,7 +137,8 @@ func (s *registrantService) Register(ctx context.Context, req app_registrant.Reg
 		}
 
 		attendees = append(attendees, regEntity.Attendee{
-			RegistrantID: registrant.ID, // Hubungkan ke pembeli
+			ID:           pubEntity.MakeUUID(att.Name, string(att.TicketID), now.String()),
+			RegistrantID: registrantID, // Map ke ID Registrant yang sudah di-generate
 			TicketID:     att.TicketID,
 			Name:         att.Name,
 			Gender:       att.Gender,
@@ -157,49 +147,20 @@ func (s *registrantService) Register(ctx context.Context, req app_registrant.Reg
 	}
 
 	if len(attendees) > 0 {
-		err = dbTrx.GetAttendeeDAO().Insert(ctx, attendees)
-		if err != nil {
-			return nil, err
+		if err := dbTrx.GetAttendeeDAO().Insert(ctx, attendees); err != nil {
+			return nil, fmt.Errorf("failed to insert attendees: %v", err)
 		}
 	}
 
-	// 8. Insert Order
-	gateway := string(payment.GatewayMidtrans)
-	paymentStatus := "pending"
-
-	order := orderEntity.Order{
-		RegistrantID:   registrant.ID,
-		OrderNumber:    orderNumber,
-		Amount:         totalCost,
-		Currency:       "IDR",
-		PaymentGateway: &gateway,
-		PaymentStatus:  paymentStatus,
-	}
-	err = dbTrx.GetOrderDAO().Insert(ctx, []orderEntity.Order{order})
-	if err != nil {
-		return nil, err
-	}
-
-	// 9. Call Payment Gateway (Midtrans) via Factory
+	// 9. Call Payment Gateway via Strategy Factory
 	paymentProvider, err := s.paymentFactory.GetProvider(payment.GatewayMidtrans)
 	if err != nil {
-		return nil, err
-	}
-
-	// Mapping Items untuk Payment Gateway
-	var paymentItems []payment.Item
-	for _, t := range ticketsInvolved {
-		paymentItems = append(paymentItems, payment.Item{
-			ID:       string(t.ID),
-			Name:     t.Title,
-			Price:    t.Price,
-			Quantity: 1, // Kita mapping 1-1 seperti di Laravel
-		})
+		return nil, fmt.Errorf("payment gateway error: %v", err)
 	}
 
 	paymentReq := payment.CreateTransactionRequest{
-		OrderID: order.OrderNumber,
-		Amount:  order.Amount,
+		OrderID: orderNumber,
+		Amount:  totalCost,
 		Customer: payment.Customer{
 			Name:  registrant.Name,
 			Email: registrant.Email,
@@ -210,26 +171,36 @@ func (s *registrantService) Register(ctx context.Context, req app_registrant.Reg
 
 	paymentResp, err := paymentProvider.CreateTransaction(ctx, paymentReq)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create payment transaction: %v", err)
 	}
 
-	// 10. Update Order dengan Token dari Gateway
-	order.PaymentToken = &paymentResp.Token
-	order.PaymentURL = &paymentResp.RedirectURL
-	err = dbTrx.GetOrderDAO().Update(ctx, []orderEntity.Order{order})
-	if err != nil {
-		return nil, err
+	// 10. Siapkan dan Insert Data Order dengan Token Payment
+	gateway := string(payment.GatewayMidtrans)
+	order := orderEntity.Order{
+		ID:             orderID,
+		RegistrantID:   registrantID, // Map ke ID Registrant
+		OrderNumber:    orderNumber,
+		Amount:         totalCost,
+		Currency:       "IDR",
+		PaymentGateway: &gateway,
+		PaymentStatus:  "pending",
+		PaymentToken:   &paymentResp.Token,
+		PaymentURL:     &paymentResp.RedirectURL,
+	}
+	order.CreatedAt = now
+
+	if err := dbTrx.GetOrderDAO().Insert(ctx, []orderEntity.Order{order}); err != nil {
+		return nil, fmt.Errorf("failed to insert order: %v", err)
 	}
 
-	// Commit Transaction
+	// 11. Final Commit Transaction
 	if err := dbTrx.GetSqlTx().Commit(); err != nil {
-		s.log.Error(ctx, "registrantService.Inserts.Commit", zap.Error(err))
-		return nil, err
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
 	}
 
-	// 11. Return Response
-	return &app_registrant.RegisterResponse{
-		Order: app_registrant.OrderInfo{
+	// 12. Return Final Response
+	return &model.RegisterResponse{
+		Order: model.OrderInfo{
 			OrderID:       string(order.ID),
 			OrderNumber:   order.OrderNumber,
 			Amount:        order.Amount,
@@ -238,7 +209,7 @@ func (s *registrantService) Register(ctx context.Context, req app_registrant.Reg
 			PaymentToken:  paymentResp.Token,
 			RedirectURL:   paymentResp.RedirectURL,
 		},
-		Registrant: app_registrant.RegistrantInfo{
+		Registrant: model.RegistrantInfo{
 			ID:         string(registrant.ID),
 			UniqueCode: registrant.UniqueCode,
 		},

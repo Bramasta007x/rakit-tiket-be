@@ -267,6 +267,10 @@ func (d ticketDAO) BookStock(ctx context.Context, id pubEntity.UUID, qty int) er
 		SET 
 			available_qty = available_qty - $1,
 			booked_qty    = booked_qty + $1,
+			status = CASE 
+				WHEN available_qty - $1 <= 0 THEN 'BOOKOUT'::ticket_status_enum
+				ELSE 'AVAILABLE'::ticket_status_enum
+			END,
 			updated_at    = $2
 		WHERE id = $3
 		AND available_qty >= $1
@@ -302,11 +306,17 @@ func (d ticketDAO) ConfirmSold(ctx context.Context, id pubEntity.UUID, qty int) 
 		return fmt.Errorf("invalid qty")
 	}
 
+	// Logika Status: Jika booked_qty habis dan available_qty memang 0, berarti resmi SOLD OUT.
 	query := `
 		UPDATE tickets
 		SET 
 			booked_qty = booked_qty - $1,
 			sold_qty   = sold_qty + $1,
+			status = CASE 
+				WHEN available_qty = 0 AND (booked_qty - $1) <= 0 THEN 'SOLD'::ticket_status_enum
+				WHEN available_qty = 0 AND (booked_qty - $1) > 0 THEN 'BOOKOUT'::ticket_status_enum
+				ELSE 'AVAILABLE'::ticket_status_enum
+			END,
 			updated_at = $2
 		WHERE id = $3
 		AND booked_qty >= $1
@@ -342,11 +352,13 @@ func (d ticketDAO) ReleaseBooked(ctx context.Context, id pubEntity.UUID, qty int
 		return fmt.Errorf("invalid qty")
 	}
 
+	// Logika Status: Karena ada tiket yang dilepas (available nambah), status PASTI kembali AVAILABLE.
 	query := `
 		UPDATE tickets
 		SET 
 			booked_qty    = booked_qty - $1,
 			available_qty = available_qty + $1,
+			status = 'AVAILABLE'::ticket_status_enum,
 			updated_at    = $2
 		WHERE id = $3
 		AND booked_qty >= $1

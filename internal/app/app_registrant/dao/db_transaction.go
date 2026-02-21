@@ -5,6 +5,7 @@ import (
 	"database/sql"
 
 	orderDao "rakit-tiket-be/internal/app/app_order/dao"
+	ticketDao "rakit-tiket-be/internal/app/app_ticket/dao"
 	"rakit-tiket-be/internal/pkg/dao"
 )
 
@@ -15,6 +16,7 @@ type DBTransaction interface {
 	GetAttendeeDAO() AttendeeDAO
 
 	GetOrderDAO() orderDao.OrderDAO
+	GetTicketDAO() ticketDao.TicketDAO
 }
 
 type dbTransaction struct {
@@ -23,6 +25,7 @@ type dbTransaction struct {
 	registrantDAO RegistrantDAO
 	attendeeDAO   AttendeeDAO
 	orderDAO      orderDao.OrderDAO
+	ticketDAO     ticketDao.TicketDAO
 }
 
 func NewTransaction(ctx context.Context, sqlDB *sql.DB) DBTransaction {
@@ -33,6 +36,7 @@ func NewTransaction(ctx context.Context, sqlDB *sql.DB) DBTransaction {
 	dbTrx.registrantDAO = MakeRegistrantDAO(dbTrx)
 	dbTrx.attendeeDAO = MakeAttendeeDAO(dbTrx)
 	dbTrx.orderDAO = orderDao.MakeOrderDAO(dbTrx)
+	dbTrx.ticketDAO = ticketDao.MakeTicketDAO(dbTrx)
 	return dbTrx
 }
 
@@ -46,4 +50,8 @@ func (dbTrx *dbTransaction) GetAttendeeDAO() AttendeeDAO {
 
 func (dbTrx *dbTransaction) GetOrderDAO() orderDao.OrderDAO {
 	return dbTrx.orderDAO
+}
+
+func (dbTrx *dbTransaction) GetTicketDAO() ticketDao.TicketDAO {
+	return dbTrx.ticketDAO
 }

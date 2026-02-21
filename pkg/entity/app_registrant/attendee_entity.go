@@ -24,7 +24,6 @@ type (
 		Gender    *string    `json:"gender"`
 		Birthdate *time.Time `json:"birthdate"`
 
-		// Metadata (Deleted, DataHash, CreatedAt, UpdatedAt)
 		pubEntity.DaoEntity
 	}
 
