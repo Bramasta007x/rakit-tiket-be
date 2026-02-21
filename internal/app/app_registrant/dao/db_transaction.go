@@ -28,7 +28,7 @@ type dbTransaction struct {
 	ticketDAO     ticketDao.TicketDAO
 }
 
-func NewTransaction(ctx context.Context, sqlDB *sql.DB) DBTransaction {
+func NewTransactionRegistrant(ctx context.Context, sqlDB *sql.DB) DBTransaction {
 	dbTrx := &dbTransaction{
 		DBTransaction: dao.NewTransaction(ctx, sqlDB),
 	}
