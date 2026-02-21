@@ -161,8 +161,10 @@ func (h landingPageHandler) handleMultipartLandingPage(c echo.Context) error {
 			return nil, err
 		}
 
+		filePathFolder := h.fileService.GetFilePath()
+
 		// Return ID file yang baru dibuat
-		filePath := fmt.Sprintf("/%s/%s/%s.ref", fileEntity.RelationSource, fileEntity.RelationID.String(), fileEntity.ID.String())
+		filePath := fmt.Sprintf("%s/%s/%s/%s.ref", filePathFolder, fileEntity.RelationSource, fileEntity.RelationID.String(), fileEntity.ID.String())
 
 		return &filePath, nil
 	}

@@ -24,6 +24,7 @@ type FileService interface {
 	Updates(ctx context.Context, files entity.FilesEntity) error
 	DeleteByID(ctx context.Context, fileID pubEntity.UUID) error
 	Upsert(ctx context.Context, files entity.FilesEntity) error
+	GetFilePath() string
 }
 
 type fileService struct {
@@ -104,7 +105,7 @@ func (s fileService) Inserts(ctx context.Context, files entity.FilesEntity) erro
 			return fmt.Errorf("empty relation(s) data")
 		}
 		file.Mime = http.DetectContentType(file.Data)
-		file.Path = fmt.Sprintf("%s/%s/%s", s.getFilePath(), file.RelationSource, file.RelationID)
+		file.Path = fmt.Sprintf("%s/%s/%s", s.GetFilePath(), file.RelationSource, file.RelationID)
 		files[idx] = file
 	}
 
@@ -148,7 +149,7 @@ func (s fileService) Updates(ctx context.Context, files entity.FilesEntity) erro
 			return fmt.Errorf("empty relation(s) data")
 		}
 		file.Mime = http.DetectContentType(file.Data)
-		file.Path = fmt.Sprintf("%s/%s/%s", s.getFilePath(), file.RelationSource, file.RelationID)
+		file.Path = fmt.Sprintf("%s/%s/%s", s.GetFilePath(), file.RelationSource, file.RelationID)
 		files[idx] = file
 	}
 
@@ -181,7 +182,7 @@ func (s fileService) DeleteByID(ctx context.Context, fileID pubEntity.UUID) erro
 	return nil
 }
 
-func (s fileService) getFilePath() string {
+func (s fileService) GetFilePath() string {
 	return envgo.GetString("APP_FILE_PATH", "../../../.tmp")
 }
 
@@ -193,7 +194,7 @@ func (s fileService) Upsert(ctx context.Context, files entity.FilesEntity) error
 			return fmt.Errorf("empty relation(s) data")
 		}
 		file.Mime = http.DetectContentType(file.Data)
-		file.Path = fmt.Sprintf("%s/%s/%s", s.getFilePath(), file.RelationSource, file.RelationID)
+		file.Path = fmt.Sprintf("%s/%s/%s", s.GetFilePath(), file.RelationSource, file.RelationID)
 		files[idx] = file
 	}
 
