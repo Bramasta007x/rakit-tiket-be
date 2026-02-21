@@ -39,6 +39,8 @@ services:
       PORT: ${PORT}
       MIGRATION_PATH: /app/internal/pkg/scripts
       LOG_ENVIRONMENT: production
+      APP_FILE_PATH: ${APP_FILE_PATH}
+      FILE_PATH: ${FILE_PATH}
 
   frontend:
     build:
