@@ -17,6 +17,9 @@ type TicketDAO interface {
 	Update(ctx context.Context, tickets entity.Tickets) error
 	Delete(ctx context.Context, id pubEntity.UUID) error
 	SoftDelete(ctx context.Context, id pubEntity.UUID) error
+	BookStock(ctx context.Context, id pubEntity.UUID, qty int) error
+	ConfirmSold(ctx context.Context, id pubEntity.UUID, qty int) error
+	ReleaseBooked(ctx context.Context, id pubEntity.UUID, qty int) error
 }
 
 type ticketDAO struct {
@@ -35,10 +38,13 @@ func (d ticketDAO) Search(ctx context.Context, query entity.TicketQuery) (entity
 		SetSQLSelect("t.id", "id").
 		SetSQLSelect("t.type", "type").
 		SetSQLSelect("t.title", "title").
+		SetSQLSelect("t.status", "status").
 		SetSQLSelect("t.description", "description").
 		SetSQLSelect("t.price", "price").
 		SetSQLSelect("t.total", "total").
-		SetSQLSelect("t.remaining", "remaining").
+		SetSQLSelect("t.available_qty", "available_qty").
+		SetSQLSelect("t.booked_qty", "booked_qty").
+		SetSQLSelect("t.sold_qty", "sold_qty").
 		SetSQLSelect("t.is_presale", "is_presale").
 		SetSQLSelect("t.order_priority", "order_priority").
 		SetSQLSelect("t.created_at", "created_at").
@@ -59,6 +65,10 @@ func (d ticketDAO) Search(ctx context.Context, query entity.TicketQuery) (entity
 
 	if query.IsPresale != nil {
 		sqlWhere.SetSQLWhere("AND", "t.is_presale", "=", *query.IsPresale)
+	}
+
+	if query.Statuses != nil {
+		sqlWhere.SetSQLWhere("AND", "t.status", "=", query.Statuses)
 	}
 
 	sql := sqlgo.NewSQLGo().
@@ -85,10 +95,13 @@ func (d ticketDAO) Search(ctx context.Context, query entity.TicketQuery) (entity
 			&ticket.ID,
 			&ticket.Type,
 			&ticket.Title,
+			&ticket.Status,
 			&ticket.Description,
 			&ticket.Price,
 			&ticket.Total,
-			&ticket.Remaining,
+			&ticket.AvailableQty,
+			&ticket.BookedQty,
+			&ticket.SoldQty,
 			&ticket.IsPresale,
 			&ticket.OrderPriority,
 			&ticket.CreatedAt,
@@ -115,10 +128,13 @@ func (d ticketDAO) Insert(ctx context.Context, tickets entity.Tickets) error {
 			"id",
 			"type",
 			"title",
+			"status",
 			"description",
 			"price",
 			"total",
-			"remaining",
+			"available_qty",
+			"booked_qty",
+			"sold_qty",
 			"is_presale",
 			"order_priority",
 			"created_at",
@@ -138,10 +154,13 @@ func (d ticketDAO) Insert(ctx context.Context, tickets entity.Tickets) error {
 			ticket.ID,
 			ticket.Type,
 			ticket.Title,
+			ticket.Status,
 			ticket.Description,
 			ticket.Price,
 			ticket.Total,
-			ticket.Remaining,
+			ticket.AvailableQty,
+			ticket.BookedQty,
+			ticket.SoldQty,
 			ticket.IsPresale,
 			ticket.OrderPriority,
 			ticket.CreatedAt,
@@ -178,10 +197,13 @@ func (d ticketDAO) Update(ctx context.Context, tickets entity.Tickets) error {
 			SetSQLUpdate("tickets").
 			SetSQLUpdateValue("type", ticket.Type).
 			SetSQLUpdateValue("title", ticket.Title).
+			SetSQLUpdateValue("status", ticket.Status).
 			SetSQLUpdateValue("description", ticket.Description).
 			SetSQLUpdateValue("price", ticket.Price).
 			SetSQLUpdateValue("total", ticket.Total).
-			SetSQLUpdateValue("remaining", ticket.Remaining).
+			SetSQLUpdateValue("available_qty", ticket.AvailableQty).
+			SetSQLUpdateValue("booked_qty", ticket.BookedQty).
+			SetSQLUpdateValue("sold_qty", ticket.SoldQty).
 			SetSQLUpdateValue("is_presale", ticket.IsPresale).
 			SetSQLUpdateValue("order_priority", ticket.OrderPriority).
 			SetSQLUpdateValue("updated_at", ticket.UpdatedAt).
@@ -221,7 +243,7 @@ func (d ticketDAO) Delete(ctx context.Context, id pubEntity.UUID) error {
 func (d ticketDAO) SoftDelete(ctx context.Context, id pubEntity.UUID) error {
 	sql := sqlgo.NewSQLGo().
 		SetSQLSchema("public").
-		SetSQLUpdate("ticket").
+		SetSQLUpdate("tickets").
 		SetSQLUpdateValue("deleted", true).
 		SetSQLWhere("AND", "id", "=", id)
 
@@ -232,4 +254,124 @@ func (d ticketDAO) SoftDelete(ctx context.Context, id pubEntity.UUID) error {
 	)
 
 	return err
+}
+
+func (d ticketDAO) BookStock(ctx context.Context, id pubEntity.UUID, qty int) error {
+
+	if qty <= 0 {
+		return fmt.Errorf("invalid qty")
+	}
+
+	query := `
+		UPDATE tickets
+		SET 
+			available_qty = available_qty - $1,
+			booked_qty    = booked_qty + $1,
+			updated_at    = $2
+		WHERE id = $3
+		AND available_qty >= $1
+		AND deleted = false
+	`
+
+	result, err := d.dbTrx.GetSqlTx().ExecContext(
+		ctx,
+		query,
+		qty,
+		time.Now(),
+		id,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return fmt.Errorf("insufficient available stock")
+	}
+
+	return nil
+}
+
+func (d ticketDAO) ConfirmSold(ctx context.Context, id pubEntity.UUID, qty int) error {
+
+	if qty <= 0 {
+		return fmt.Errorf("invalid qty")
+	}
+
+	query := `
+		UPDATE tickets
+		SET 
+			booked_qty = booked_qty - $1,
+			sold_qty   = sold_qty + $1,
+			updated_at = $2
+		WHERE id = $3
+		AND booked_qty >= $1
+		AND deleted = false
+	`
+
+	result, err := d.dbTrx.GetSqlTx().ExecContext(
+		ctx,
+		query,
+		qty,
+		time.Now(),
+		id,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return fmt.Errorf("insufficient booked stock")
+	}
+
+	return nil
+}
+
+func (d ticketDAO) ReleaseBooked(ctx context.Context, id pubEntity.UUID, qty int) error {
+
+	if qty <= 0 {
+		return fmt.Errorf("invalid qty")
+	}
+
+	query := `
+		UPDATE tickets
+		SET 
+			booked_qty    = booked_qty - $1,
+			available_qty = available_qty + $1,
+			updated_at    = $2
+		WHERE id = $3
+		AND booked_qty >= $1
+		AND deleted = false
+	`
+
+	result, err := d.dbTrx.GetSqlTx().ExecContext(
+		ctx,
+		query,
+		qty,
+		time.Now(),
+		id,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return fmt.Errorf("insufficient booked stock to release")
+	}
+
+	return nil
 }
