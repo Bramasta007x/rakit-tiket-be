@@ -162,8 +162,9 @@ func (h landingPageHandler) handleMultipartLandingPage(c echo.Context) error {
 		}
 
 		// Return ID file yang baru dibuat
-		idStr := fileEntity.ID.String()
-		return &idStr, nil
+		filePath := fmt.Sprintf("/%s/%s/%s.ref", fileEntity.RelationSource, fileEntity.RelationID.String(), fileEntity.ID.String())
+
+		return &filePath, nil
 	}
 
 	// Proses Upload Banner Image (Jika ada)
