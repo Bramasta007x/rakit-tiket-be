@@ -58,6 +58,10 @@ func (m *midtransProvider) CreateTransaction(ctx context.Context, req CreateTran
 			Phone: req.Customer.Phone,
 		},
 		Items: &midtransItems,
+		Expiry: &snap.ExpiryDetails{
+			Unit:     "minute",
+			Duration: int64(req.ExpiryMinutes),
+		},
 	}
 
 	// Eksekusi ke midtrans

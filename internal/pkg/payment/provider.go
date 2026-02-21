@@ -24,10 +24,11 @@ type Item struct {
 }
 
 type CreateTransactionRequest struct {
-	OrderID  string
-	Amount   float64
-	Customer Customer
-	Items    []Item
+	OrderID       string
+	Amount        float64
+	Customer      Customer
+	Items         []Item
+	ExpiryMinutes int
 }
 
 // DTO Response (Universal)
