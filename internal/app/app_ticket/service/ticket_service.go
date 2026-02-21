@@ -27,10 +27,7 @@ func MakeTicketService(sqlDB *sql.DB) TicketService {
 	}
 }
 
-func (s ticketService) Search(
-	ctx context.Context,
-	query entity.TicketQuery,
-) (entity.Tickets, error) {
+func (s ticketService) Search(ctx context.Context, query entity.TicketQuery) (entity.Tickets, error) {
 
 	dbTrx := dao.NewTransactionTicket(ctx, s.sqlDB)
 	defer dbTrx.GetSqlTx().Rollback()
@@ -43,10 +40,7 @@ func (s ticketService) Search(
 	return tickets, nil
 }
 
-func (s ticketService) Insert(
-	ctx context.Context,
-	tickets entity.Tickets,
-) error {
+func (s ticketService) Insert(ctx context.Context, tickets entity.Tickets) error {
 
 	dbTrx := dao.NewTransactionTicket(ctx, s.sqlDB)
 	defer dbTrx.GetSqlTx().Rollback()
@@ -62,10 +56,7 @@ func (s ticketService) Insert(
 	return nil
 }
 
-func (s ticketService) Update(
-	ctx context.Context,
-	tickets entity.Tickets,
-) error {
+func (s ticketService) Update(ctx context.Context, tickets entity.Tickets) error {
 
 	dbTrx := dao.NewTransactionTicket(ctx, s.sqlDB)
 	defer dbTrx.GetSqlTx().Rollback()
@@ -81,10 +72,7 @@ func (s ticketService) Update(
 	return nil
 }
 
-func (s ticketService) Delete(
-	ctx context.Context,
-	id pubEntity.UUID,
-) error {
+func (s ticketService) Delete(ctx context.Context, id pubEntity.UUID) error {
 
 	dbTrx := dao.NewTransactionTicket(ctx, s.sqlDB)
 	defer dbTrx.GetSqlTx().Rollback()
@@ -100,10 +88,7 @@ func (s ticketService) Delete(
 	return nil
 }
 
-func (s ticketService) SoftDelete(
-	ctx context.Context,
-	id pubEntity.UUID,
-) error {
+func (s ticketService) SoftDelete(ctx context.Context, id pubEntity.UUID) error {
 
 	dbTrx := dao.NewTransactionTicket(ctx, s.sqlDB)
 	defer dbTrx.GetSqlTx().Rollback()

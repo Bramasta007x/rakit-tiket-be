@@ -1,12 +1,19 @@
 -- Drop table if exists
 DROP TABLE IF EXISTS tickets;
 
+CREATE TYPE ticket_status_enum AS ENUM (
+    'AVAILABLE',
+    'BOOKED',
+    'SOLD'
+);
+
 CREATE TABLE tickets (
     id uuid NOT NULL,
 
     -- Ticket Info
     "type" varchar NOT NULL,             -- SILVER, GOLD, FESTIVAL
     title varchar NOT NULL,
+    status ticket_status_enum NOT NULL DEFAULT 'AVAILABLE',
     description text NULL,
 
     -- Pricing & Stock
