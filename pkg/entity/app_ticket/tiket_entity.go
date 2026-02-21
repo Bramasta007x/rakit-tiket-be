@@ -8,7 +8,7 @@ type TicketStatus string
 
 const (
 	TicketStatusAvailable TicketStatus = "AVAILABLE" // available_qty
-	TicketStatusBooked    TicketStatus = "BOOKED"    // booked_qty
+	TicketStatusBooked    TicketStatus = "BOOKOUT"   // booked_qty
 	TicketStatusSold      TicketStatus = "SOLD"      // sold_qty
 )
 

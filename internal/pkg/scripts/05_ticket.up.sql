@@ -5,7 +5,7 @@ DROP TYPE IF EXISTS ticket_status_enum;
 
 CREATE TYPE ticket_status_enum AS ENUM (
     'AVAILABLE',
-    'BOOKED',
+    'BOOKOUT',
     'SOLD'
 );
 
