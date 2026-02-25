@@ -48,7 +48,7 @@ func (h landingPageHandler) RegisterRouter(g *echo.Group) {
 	restricted.POST("/landing-page", h.upsertLandingPageWrapper)
 
 	restricted.PUT("/landing-pages", h.updateLandingPages)
-	restricted.PUT("/landing-page/:id", h.updateLandingPage)
+	restricted.PUT("/landing-page/:id", h.upsertLandingPageWrapper)
 
 	restricted.DELETE("/landing-page/:id", h.softDeleteLandingPage)
 }
