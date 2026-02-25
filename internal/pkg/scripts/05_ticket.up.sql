@@ -36,7 +36,7 @@ CREATE TABLE tickets (
     created_at timestamptz NOT NULL,
     updated_at timestamptz NULL,
 
-    CONSTRAINT tickets_pkey PRIMARY KEY (id)
+    CONSTRAINT tickets_pkey PRIMARY KEY (id),
 
     -- Prevent negative values
     CONSTRAINT tickets_qty_non_negative CHECK (

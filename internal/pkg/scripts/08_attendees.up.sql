@@ -11,5 +11,5 @@ CREATE TABLE attendees (
     deleted bool NOT NULL DEFAULT false,
     data_hash varchar NOT NULL,
     created_at timestamptz NOT NULL,
-    updated_at timestamptz NULL,
+    updated_at timestamptz NULL
 );
