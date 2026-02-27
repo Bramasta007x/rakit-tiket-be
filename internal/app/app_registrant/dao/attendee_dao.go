@@ -7,8 +7,10 @@ import (
 
 	pubEntity "rakit-tiket-be/pkg/entity"
 	entity "rakit-tiket-be/pkg/entity/app_registrant"
+	"rakit-tiket-be/pkg/util"
 
 	"gitlab.com/threetopia/sqlgo/v2"
+	"go.uber.org/zap"
 )
 
 type AttendeeDAO interface {
@@ -19,26 +21,14 @@ type AttendeeDAO interface {
 	SoftDelete(ctx context.Context, id pubEntity.UUID) error
 }
 
-func attNullStr(s *string) interface{} {
-	if s == nil {
-		return nil
-	}
-	return *s
-}
-
-func attNullTime(t *time.Time) interface{} {
-	if t == nil {
-		return nil
-	}
-	return *t
-}
-
 type attendeeDAO struct {
+	log   util.LogUtil
 	dbTrx DBTransaction
 }
 
-func MakeAttendeeDAO(dbTrx DBTransaction) AttendeeDAO {
+func MakeAttendeeDAO(log util.LogUtil, dbTrx DBTransaction) AttendeeDAO {
 	return attendeeDAO{
+		log:   log,
 		dbTrx: dbTrx,
 	}
 }
@@ -58,17 +48,15 @@ func (d attendeeDAO) Search(ctx context.Context, query entity.AttendeeQuery) (en
 	sqlFrom := sqlgo.NewSQLGoFrom().
 		SetSQLFrom("attendees", "a")
 
-	sqlWhere := sqlgo.NewSQLGoWhere()
-	sqlWhere.SetSQLWhere("AND", "a.deleted", "=", false)
+	sqlWhere := sqlgo.NewSQLGoWhere().
+		SetSQLWhere("AND", "a.deleted", "=", false)
 
 	if len(query.IDs) > 0 {
 		sqlWhere.SetSQLWhere("AND", "a.id", "IN", query.IDs)
 	}
-
 	if len(query.RegistrantIDs) > 0 {
 		sqlWhere.SetSQLWhere("AND", "a.registrant_id", "IN", query.RegistrantIDs)
 	}
-
 	if len(query.TicketIDs) > 0 {
 		sqlWhere.SetSQLWhere("AND", "a.ticket_id", "IN", query.TicketIDs)
 	}
@@ -79,12 +67,21 @@ func (d attendeeDAO) Search(ctx context.Context, query entity.AttendeeQuery) (en
 		SetSQLGoFrom(sqlFrom).
 		SetSQLGoWhere(sqlWhere)
 
-	rows, err := d.dbTrx.GetSqlDB().QueryContext(
-		ctx,
-		sql.BuildSQL(),
-		sql.GetSQLGoParameter().GetSQLParameter()...,
+	sqlStr := sql.BuildSQL()
+	sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
+
+	d.log.Debug(ctx, "attendeeDAO.Search",
+		zap.String("SQL", sqlStr),
+		zap.Any("Params", sqlParams),
 	)
+
+	rows, err := d.dbTrx.GetSqlDB().QueryContext(ctx, sqlStr, sqlParams...)
 	if err != nil {
+		d.log.Error(ctx, "attendeeDAO.Search",
+			zap.String("SQL", sqlStr),
+			zap.Any("Params", sqlParams),
+			zap.Error(err),
+		)
 		return nil, err
 	}
 	defer rows.Close()
@@ -103,6 +100,7 @@ func (d attendeeDAO) Search(ctx context.Context, query entity.AttendeeQuery) (en
 			&att.CreatedAt,
 			&att.UpdatedAt,
 		); err != nil {
+			d.log.Error(ctx, "attendeeDAO.Search.Scan", zap.Error(err))
 			return nil, err
 		}
 
@@ -147,10 +145,10 @@ func (d attendeeDAO) Insert(ctx context.Context, attendees entity.Attendees) err
 			att.RegistrantID,
 			att.TicketID,
 			att.Name,
-			attNullStr(att.Gender),
-			attNullTime(att.Birthdate),
+			att.Gender,
+			att.Birthdate,
 			att.DaoEntity.DataHash,
-			att.DaoEntity.CreatedAt,
+			att.CreatedAt,
 		)
 
 		attendees[i] = att
@@ -160,13 +158,26 @@ func (d attendeeDAO) Insert(ctx context.Context, attendees entity.Attendees) err
 		SetSQLSchema("public").
 		SetSQLGoInsert(sqlInsert)
 
-	_, err := d.dbTrx.GetSqlTx().ExecContext(
-		ctx,
-		sql.BuildSQL(),
-		sql.GetSQLGoParameter().GetSQLParameter()...,
+	sqlStr := sql.BuildSQL()
+	sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
+
+	d.log.Debug(ctx, "attendeeDAO.Insert",
+		zap.String("SQL", sqlStr),
+		zap.Any("Params", sqlParams),
+		zap.Int("Len", len(sqlParams)),
 	)
 
-	return err
+	_, err := d.dbTrx.GetSqlTx().ExecContext(ctx, sqlStr, sqlParams...)
+	if err != nil {
+		d.log.Error(ctx, "attendeeDAO.Insert",
+			zap.String("SQL", sqlStr),
+			zap.Any("Params", sqlParams),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	return nil
 }
 
 func (d attendeeDAO) Update(ctx context.Context, attendees entity.Attendees) error {
@@ -176,6 +187,7 @@ func (d attendeeDAO) Update(ctx context.Context, attendees entity.Attendees) err
 	}
 
 	for i, att := range attendees {
+
 		now := time.Now()
 		att.UpdatedAt = &now
 
@@ -189,12 +201,21 @@ func (d attendeeDAO) Update(ctx context.Context, attendees entity.Attendees) err
 			SetSQLUpdateValue("updated_at", att.UpdatedAt).
 			SetSQLWhere("AND", "id", "=", att.ID)
 
-		_, err := d.dbTrx.GetSqlTx().ExecContext(
-			ctx,
-			sql.BuildSQL(),
-			sql.GetSQLGoParameter().GetSQLParameter()...,
+		sqlStr := sql.BuildSQL()
+		sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
+
+		d.log.Debug(ctx, "attendeeDAO.Update",
+			zap.String("SQL", sqlStr),
+			zap.Any("Params", sqlParams),
 		)
+
+		_, err := d.dbTrx.GetSqlTx().ExecContext(ctx, sqlStr, sqlParams...)
 		if err != nil {
+			d.log.Error(ctx, "attendeeDAO.Update",
+				zap.String("SQL", sqlStr),
+				zap.Any("Params", sqlParams),
+				zap.Error(err),
+			)
 			return err
 		}
 
@@ -205,32 +226,58 @@ func (d attendeeDAO) Update(ctx context.Context, attendees entity.Attendees) err
 }
 
 func (d attendeeDAO) Delete(ctx context.Context, id pubEntity.UUID) error {
+
 	sql := sqlgo.NewSQLGo().
 		SetSQLSchema("public").
 		SetSQLDelete("attendees").
 		SetSQLWhere("AND", "id", "=", id)
 
-	_, err := d.dbTrx.GetSqlTx().ExecContext(
-		ctx,
-		sql.BuildSQL(),
-		sql.GetSQLGoParameter().GetSQLParameter()...,
+	sqlStr := sql.BuildSQL()
+	sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
+
+	d.log.Debug(ctx, "attendeeDAO.Delete",
+		zap.String("SQL", sqlStr),
+		zap.Any("Params", sqlParams),
 	)
 
-	return err
+	_, err := d.dbTrx.GetSqlTx().ExecContext(ctx, sqlStr, sqlParams...)
+	if err != nil {
+		d.log.Error(ctx, "attendeeDAO.Delete",
+			zap.String("SQL", sqlStr),
+			zap.Any("Params", sqlParams),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	return nil
 }
 
 func (d attendeeDAO) SoftDelete(ctx context.Context, id pubEntity.UUID) error {
+
 	sql := sqlgo.NewSQLGo().
 		SetSQLSchema("public").
 		SetSQLUpdate("attendees").
 		SetSQLUpdateValue("deleted", true).
 		SetSQLWhere("AND", "id", "=", id)
 
-	_, err := d.dbTrx.GetSqlTx().ExecContext(
-		ctx,
-		sql.BuildSQL(),
-		sql.GetSQLGoParameter().GetSQLParameter()...,
+	sqlStr := sql.BuildSQL()
+	sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
+
+	d.log.Debug(ctx, "attendeeDAO.SoftDelete",
+		zap.String("SQL", sqlStr),
+		zap.Any("Params", sqlParams),
 	)
 
-	return err
+	_, err := d.dbTrx.GetSqlTx().ExecContext(ctx, sqlStr, sqlParams...)
+	if err != nil {
+		d.log.Error(ctx, "attendeeDAO.SoftDelete",
+			zap.String("SQL", sqlStr),
+			zap.Any("Params", sqlParams),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	return nil
 }

@@ -14,6 +14,7 @@ import (
 	regEntity "rakit-tiket-be/pkg/entity/app_registrant"
 	ticketEntity "rakit-tiket-be/pkg/entity/app_ticket"
 	model "rakit-tiket-be/pkg/model/app_registrant"
+	"rakit-tiket-be/pkg/util"
 )
 
 type RegistrantService interface {
@@ -21,12 +22,14 @@ type RegistrantService interface {
 }
 
 type registrantService struct {
+	log            util.LogUtil
 	sqlDB          *sql.DB
 	paymentFactory *payment.PaymentFactory
 }
 
-func MakeRegistrantService(sqlDB *sql.DB, paymentFactory *payment.PaymentFactory) RegistrantService {
+func MakeRegistrantService(log util.LogUtil, sqlDB *sql.DB, paymentFactory *payment.PaymentFactory) RegistrantService {
 	return registrantService{
+		log:            log,
 		sqlDB:          sqlDB,
 		paymentFactory: paymentFactory,
 	}
@@ -51,8 +54,8 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 		ticketIDs = append(ticketIDs, string(att.TicketID))
 	}
 
-	// 2. Mulai Database Transaction (God Transaction: Registrant + Attendee + Order + Ticket)
-	dbTrx := dao.NewTransactionRegistrant(ctx, s.sqlDB)
+	// 4. Masukkan s.log sebagai argumen kedua (Memperbaiki ERROR)
+	dbTrx := dao.NewTransactionRegistrant(ctx, s.log, s.sqlDB)
 	defer dbTrx.GetSqlTx().Rollback()
 
 	// 3. Cari Order berdasarkan OrderNumber
@@ -76,7 +79,7 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 			return nil, fmt.Errorf("tiket %s tidak ditemukan", tID)
 		}
 
-		// A. Eksekusi Atomic Booking! (Memindahkan Available ke Booked)
+		// A. Eksekusi Atomic Booking!
 		err := dbTrx.GetTicketDAO().BookStock(ctx, pubEntity.UUID(tID), qty)
 		if err != nil {
 			return nil, fmt.Errorf("stok tiket %s tidak mencukupi (habis)", ticketData.Title)
@@ -94,9 +97,6 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 
 	// 5. Generate Identifier
 	now := time.Now()
-	// rand.Seed(now.UnixNano())
-	// randomNum := rand.Intn(99999) + 1
-
 	registrantID := pubEntity.MakeUUID(req.Registrant.Email, now.String())
 	orderID := pubEntity.MakeUUID("ORDER", req.Registrant.Email, now.String())
 
@@ -165,7 +165,7 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 		Amount:        totalCost,
 		Customer:      payment.Customer{Name: registrant.Name, Email: registrant.Email, Phone: registrant.Phone},
 		Items:         paymentItems,
-		ExpiryMinutes: 30, // TICKETING RULES: Pembayaran dikunci hanya 30 Menit!
+		ExpiryMinutes: 30,
 	}
 
 	paymentResp, err := paymentProvider.CreateTransaction(ctx, paymentReq)
@@ -200,7 +200,6 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 		return nil, err
 	}
 
-	// 11. Selesai
 	return &model.RegisterResponse{
 		Order: model.OrderInfo{
 			OrderID:       string(order.ID),
@@ -216,5 +215,4 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 			UniqueCode: registrant.UniqueCode,
 		},
 	}, nil
-
 }

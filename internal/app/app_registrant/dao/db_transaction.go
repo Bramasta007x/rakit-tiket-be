@@ -7,6 +7,7 @@ import (
 	orderDao "rakit-tiket-be/internal/app/app_order/dao"
 	ticketDao "rakit-tiket-be/internal/app/app_ticket/dao"
 	"rakit-tiket-be/internal/pkg/dao"
+	"rakit-tiket-be/pkg/util" // Tambahkan import util
 )
 
 type DBTransaction interface {
@@ -28,15 +29,16 @@ type dbTransaction struct {
 	ticketDAO     ticketDao.TicketDAO
 }
 
-func NewTransactionRegistrant(ctx context.Context, sqlDB *sql.DB) DBTransaction {
+func NewTransactionRegistrant(ctx context.Context, log util.LogUtil, sqlDB *sql.DB) DBTransaction {
 	dbTrx := &dbTransaction{
 		DBTransaction: dao.NewTransaction(ctx, sqlDB),
 	}
 
-	dbTrx.registrantDAO = MakeRegistrantDAO(dbTrx)
-	dbTrx.attendeeDAO = MakeAttendeeDAO(dbTrx)
-	dbTrx.orderDAO = orderDao.MakeOrderDAO(dbTrx)
-	dbTrx.ticketDAO = ticketDao.MakeTicketDAO(dbTrx)
+	dbTrx.registrantDAO = MakeRegistrantDAO(log, dbTrx)
+	dbTrx.attendeeDAO = MakeAttendeeDAO(log, dbTrx)
+	dbTrx.orderDAO = orderDao.MakeOrderDAO(log, dbTrx)
+	dbTrx.ticketDAO = ticketDao.MakeTicketDAO(log, dbTrx)
+
 	return dbTrx
 }
 

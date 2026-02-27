@@ -5,6 +5,7 @@ import (
 	"database/sql"
 
 	baseDao "rakit-tiket-be/internal/pkg/dao"
+	"rakit-tiket-be/pkg/util" // Tambahkan import util
 )
 
 type DBTransaction interface {
@@ -19,12 +20,12 @@ type dbTransaction struct {
 	ticketDAO TicketDAO
 }
 
-func NewTransactionTicket(ctx context.Context, sqlDB *sql.DB) DBTransaction {
+func NewTransactionTicket(ctx context.Context, log util.LogUtil, sqlDB *sql.DB) DBTransaction {
 	dbTrx := &dbTransaction{
 		DBTransaction: baseDao.NewTransaction(ctx, sqlDB),
 	}
 
-	dbTrx.ticketDAO = MakeTicketDAO(dbTrx)
+	dbTrx.ticketDAO = MakeTicketDAO(log, dbTrx)
 	return dbTrx
 }
 

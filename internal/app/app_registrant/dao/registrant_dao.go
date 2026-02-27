@@ -7,8 +7,10 @@ import (
 
 	pubEntity "rakit-tiket-be/pkg/entity"
 	entity "rakit-tiket-be/pkg/entity/app_registrant"
+	"rakit-tiket-be/pkg/util" // Tambahkan import util
 
 	"gitlab.com/threetopia/sqlgo/v2"
+	"go.uber.org/zap" // Tambahkan import zap
 )
 
 type RegistrantDAO interface {
@@ -19,33 +21,14 @@ type RegistrantDAO interface {
 	SoftDelete(ctx context.Context, id pubEntity.UUID) error
 }
 
-func nullStr(s *string) interface{} {
-	if s == nil {
-		return nil
-	}
-	return *s
-}
-
-func nullTime(t *time.Time) interface{} {
-	if t == nil {
-		return nil
-	}
-	return *t
-}
-
-func nullUUID(u *pubEntity.UUID) interface{} {
-	if u == nil {
-		return nil
-	}
-	return *u
-}
-
 type registrantDAO struct {
+	log   util.LogUtil // Tambahkan field log
 	dbTrx DBTransaction
 }
 
-func MakeRegistrantDAO(dbTrx DBTransaction) RegistrantDAO {
+func MakeRegistrantDAO(log util.LogUtil, dbTrx DBTransaction) RegistrantDAO {
 	return registrantDAO{
+		log:   log,
 		dbTrx: dbTrx,
 	}
 }
@@ -72,7 +55,6 @@ func (d registrantDAO) Search(ctx context.Context, query entity.RegistrantQuery)
 
 	sqlWhere := sqlgo.NewSQLGoWhere()
 
-	// Default filter: jangan ambil yang sudah soft deleted
 	sqlWhere.SetSQLWhere("AND", "r.deleted", "=", false)
 
 	if len(query.IDs) > 0 {
@@ -97,12 +79,21 @@ func (d registrantDAO) Search(ctx context.Context, query entity.RegistrantQuery)
 		SetSQLGoFrom(sqlFrom).
 		SetSQLGoWhere(sqlWhere)
 
-	rows, err := d.dbTrx.GetSqlDB().QueryContext(
-		ctx,
-		sql.BuildSQL(),
-		sql.GetSQLGoParameter().GetSQLParameter()...,
+	sqlStr := sql.BuildSQL()
+	sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
+
+	d.log.Debug(ctx, "registrantDAO.Search",
+		zap.String("SQL", sqlStr),
+		zap.Any("Params", sqlParams),
 	)
+
+	rows, err := d.dbTrx.GetSqlDB().QueryContext(ctx, sqlStr, sqlParams...)
 	if err != nil {
+		d.log.Error(ctx, "registrantDAO.Search",
+			zap.String("SQL", sqlStr),
+			zap.Any("Params", sqlParams),
+			zap.Error(err),
+		)
 		return nil, err
 	}
 	defer rows.Close()
@@ -111,22 +102,22 @@ func (d registrantDAO) Search(ctx context.Context, query entity.RegistrantQuery)
 	for rows.Next() {
 		var reg entity.Registrant
 
-		// Note: Scan urutannya harus sama dengan SetSQLSelect
 		if err := rows.Scan(
 			&reg.ID,
 			&reg.UniqueCode,
-			nullUUID(reg.TicketID),
+			&reg.TicketID,
 			&reg.Name,
 			&reg.Email,
 			&reg.Phone,
-			nullStr(reg.Gender),
-			nullTime(reg.Birthdate),
+			&reg.Gender,
+			&reg.Birthdate,
 			&reg.TotalCost,
 			&reg.TotalTickets,
 			&reg.Status,
 			&reg.CreatedAt,
 			&reg.UpdatedAt,
 		); err != nil {
+			d.log.Error(ctx, "registrantDAO.Search.Scan", zap.Error(err))
 			return nil, err
 		}
 
@@ -184,7 +175,7 @@ func (d registrantDAO) Insert(ctx context.Context, registrants entity.Registrant
 			reg.TotalTickets,
 			reg.Status,
 			reg.DaoEntity.DataHash,
-			reg.DaoEntity.CreatedAt,
+			reg.CreatedAt,
 		)
 
 		registrants[i] = reg
@@ -194,13 +185,26 @@ func (d registrantDAO) Insert(ctx context.Context, registrants entity.Registrant
 		SetSQLSchema("public").
 		SetSQLGoInsert(sqlInsert)
 
-	_, err := d.dbTrx.GetSqlTx().ExecContext(
-		ctx,
-		sql.BuildSQL(),
-		sql.GetSQLGoParameter().GetSQLParameter()...,
+	sqlStr := sql.BuildSQL()
+	sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
+
+	d.log.Debug(ctx, "registrantDAO.Insert",
+		zap.String("SQL", sqlStr),
+		zap.Any("Params", sqlParams),
+		zap.Int("Len", len(registrants)),
 	)
 
-	return err
+	_, err := d.dbTrx.GetSqlTx().ExecContext(ctx, sqlStr, sqlParams...)
+	if err != nil {
+		d.log.Error(ctx, "registrantDAO.Insert",
+			zap.String("SQL", sqlStr),
+			zap.Any("Params", sqlParams),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	return nil
 }
 
 func (d registrantDAO) Update(ctx context.Context, registrants entity.Registrants) error {
@@ -228,12 +232,21 @@ func (d registrantDAO) Update(ctx context.Context, registrants entity.Registrant
 			SetSQLUpdateValue("updated_at", reg.UpdatedAt).
 			SetSQLWhere("AND", "id", "=", reg.ID)
 
-		_, err := d.dbTrx.GetSqlTx().ExecContext(
-			ctx,
-			sql.BuildSQL(),
-			sql.GetSQLGoParameter().GetSQLParameter()...,
+		sqlStr := sql.BuildSQL()
+		sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
+
+		d.log.Debug(ctx, "registrantDAO.Update",
+			zap.String("SQL", sqlStr),
+			zap.Any("Params", sqlParams),
 		)
+
+		_, err := d.dbTrx.GetSqlTx().ExecContext(ctx, sqlStr, sqlParams...)
 		if err != nil {
+			d.log.Error(ctx, "registrantDAO.Update",
+				zap.String("SQL", sqlStr),
+				zap.Any("Params", sqlParams),
+				zap.Error(err),
+			)
 			return err
 		}
 
@@ -249,13 +262,25 @@ func (d registrantDAO) Delete(ctx context.Context, id pubEntity.UUID) error {
 		SetSQLDelete("registrants").
 		SetSQLWhere("AND", "id", "=", id)
 
-	_, err := d.dbTrx.GetSqlTx().ExecContext(
-		ctx,
-		sql.BuildSQL(),
-		sql.GetSQLGoParameter().GetSQLParameter()...,
+	sqlStr := sql.BuildSQL()
+	sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
+
+	d.log.Debug(ctx, "registrantDAO.Delete",
+		zap.String("SQL", sqlStr),
+		zap.Any("Params", sqlParams),
 	)
 
-	return err
+	_, err := d.dbTrx.GetSqlTx().ExecContext(ctx, sqlStr, sqlParams...)
+	if err != nil {
+		d.log.Error(ctx, "registrantDAO.Delete",
+			zap.String("SQL", sqlStr),
+			zap.Any("Params", sqlParams),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	return nil
 }
 
 func (d registrantDAO) SoftDelete(ctx context.Context, id pubEntity.UUID) error {
@@ -265,11 +290,23 @@ func (d registrantDAO) SoftDelete(ctx context.Context, id pubEntity.UUID) error 
 		SetSQLUpdateValue("deleted", true).
 		SetSQLWhere("AND", "id", "=", id)
 
-	_, err := d.dbTrx.GetSqlTx().ExecContext(
-		ctx,
-		sql.BuildSQL(),
-		sql.GetSQLGoParameter().GetSQLParameter()...,
+	sqlStr := sql.BuildSQL()
+	sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
+
+	d.log.Debug(ctx, "registrantDAO.SoftDelete",
+		zap.String("SQL", sqlStr),
+		zap.Any("Params", sqlParams),
 	)
 
-	return err
+	_, err := d.dbTrx.GetSqlTx().ExecContext(ctx, sqlStr, sqlParams...)
+	if err != nil {
+		d.log.Error(ctx, "registrantDAO.SoftDelete",
+			zap.String("SQL", sqlStr),
+			zap.Any("Params", sqlParams),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	return nil
 }

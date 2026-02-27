@@ -11,6 +11,7 @@ import (
 	pubEntity "rakit-tiket-be/pkg/entity"
 	orderEntity "rakit-tiket-be/pkg/entity/app_order"
 	regEntity "rakit-tiket-be/pkg/entity/app_registrant"
+	"rakit-tiket-be/pkg/util"
 )
 
 type OrderService interface {
@@ -18,19 +19,20 @@ type OrderService interface {
 }
 
 type orderService struct {
+	log            util.LogUtil
 	sqlDB          *sql.DB
 	paymentFactory *payment.PaymentFactory
 }
 
-func MakeOrderService(sqlDB *sql.DB, paymentFactory *payment.PaymentFactory) OrderService {
+func MakeOrderService(log util.LogUtil, sqlDB *sql.DB, paymentFactory *payment.PaymentFactory) OrderService {
 	return orderService{
+		log:            log,
 		sqlDB:          sqlDB,
 		paymentFactory: paymentFactory,
 	}
 }
 
 func (s orderService) HandleWebhook(ctx context.Context, gateway payment.GatewayType, payload []byte) error {
-	// 1. Parse Webhook dari Gateway yang sesuai
 	provider, err := s.paymentFactory.GetProvider(gateway)
 	if err != nil {
 		return err
@@ -41,11 +43,9 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 		return err
 	}
 
-	// 2. Mulai DB Transaction (Kita pinjam regDao agar bisa modif Order, Registrant, dan Ticket sekaligus)
-	dbTrx := regDao.NewTransactionRegistrant(ctx, s.sqlDB)
+	dbTrx := regDao.NewTransactionRegistrant(ctx, s.log, s.sqlDB)
 	defer dbTrx.GetSqlTx().Rollback()
 
-	// 3. Cari Order berdasarkan OrderNumber
 	orders, err := dbTrx.GetOrderDAO().Search(ctx, orderEntity.OrderQuery{
 		OrderNumbers: []string{notif.OrderID},
 	})
@@ -54,12 +54,12 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 	}
 	orderData := orders[0]
 
-	// Idempotency Check: Jika status order sudah final (paid/failed/expired), abaikan request
+	// Idempotency Check
 	if orderData.PaymentStatus == "paid" || orderData.PaymentStatus == "failed" || orderData.PaymentStatus == "expired" {
-		return nil // Webhook sudah diproses sebelumnya
+		return nil
 	}
 
-	// Jika status baru adalah pending, maka tidak ada aksi krusial, cukup update order metadata saja
+	// Jika status baru adalah pending
 	if notif.PaymentStatus == "pending" {
 		orderData.PaymentMethod = &notif.PaymentType
 		orderData.PaymentTransactionID = &notif.TransactionID
@@ -68,9 +68,7 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 		return dbTrx.GetSqlTx().Commit()
 	}
 
-	// 4. Proses Perubahan Status Status (Berhasil atau Gagal)
-
-	// Cari Registrant dan Attendees untuk menghitung jumlah tiket
+	// Cari Registrant dan Attendees
 	registrants, err := dbTrx.GetRegistrantDAO().Search(ctx, regEntity.RegistrantQuery{
 		IDs: []string{string(orderData.RegistrantID)},
 	})
@@ -86,7 +84,6 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 		return err
 	}
 
-	// Mapping Qty Tiket yang dibeli
 	ticketQtyMap := make(map[string]int)
 	if registrantData.TicketID != nil {
 		ticketQtyMap[string(*registrantData.TicketID)]++
@@ -95,11 +92,9 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 		ticketQtyMap[string(att.TicketID)]++
 	}
 
-	// 5. EKSEKUSI ATOMIC TICKET BERDASARKAN STATUS
 	now := time.Now()
 
 	if notif.PaymentStatus == "paid" {
-		// A. PEMBAYARAN LUNAS -> Konfirmasi Booked menjadi Sold
 		for tID, qty := range ticketQtyMap {
 			err := dbTrx.GetTicketDAO().ConfirmSold(ctx, pubEntity.UUID(tID), qty)
 			if err != nil {
@@ -109,7 +104,6 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 		orderData.PaymentTime = &now
 
 	} else if notif.PaymentStatus == "failed" || notif.PaymentStatus == "expired" {
-		// B. PEMBAYARAN GAGAL/KADALUWARSA -> Kembalikan Booked ke Available (Release)
 		for tID, qty := range ticketQtyMap {
 			err := dbTrx.GetTicketDAO().ReleaseBooked(ctx, pubEntity.UUID(tID), qty)
 			if err != nil {

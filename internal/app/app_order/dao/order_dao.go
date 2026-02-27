@@ -8,8 +8,10 @@ import (
 	baseDao "rakit-tiket-be/internal/pkg/dao"
 	pubEntity "rakit-tiket-be/pkg/entity"
 	entity "rakit-tiket-be/pkg/entity/app_order"
+	"rakit-tiket-be/pkg/util" // Import util untuk logging
 
 	"gitlab.com/threetopia/sqlgo/v2"
+	"go.uber.org/zap" // Import zap untuk structured logging
 )
 
 type OrderDAO interface {
@@ -20,26 +22,14 @@ type OrderDAO interface {
 	SoftDelete(ctx context.Context, id pubEntity.UUID) error
 }
 
-func ordNullStr(s *string) interface{} {
-	if s == nil {
-		return nil
-	}
-	return *s
-}
-
-func ordNullTime(t *time.Time) interface{} {
-	if t == nil {
-		return nil
-	}
-	return *t
-}
-
 type orderDAO struct {
+	log   util.LogUtil // Tambahkan logger
 	dbTrx baseDao.DBTransaction
 }
 
-func MakeOrderDAO(dbTrx baseDao.DBTransaction) OrderDAO {
+func MakeOrderDAO(log util.LogUtil, dbTrx baseDao.DBTransaction) OrderDAO {
 	return orderDAO{
+		log:   log,
 		dbTrx: dbTrx,
 	}
 }
@@ -99,12 +89,21 @@ func (d orderDAO) Search(ctx context.Context, query entity.OrderQuery) (entity.O
 		SetSQLGoFrom(sqlFrom).
 		SetSQLGoWhere(sqlWhere)
 
-	rows, err := d.dbTrx.GetSqlDB().QueryContext(
-		ctx,
-		sql.BuildSQL(),
-		sql.GetSQLGoParameter().GetSQLParameter()...,
+	sqlStr := sql.BuildSQL()
+	sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
+
+	d.log.Debug(ctx, "orderDAO.Search",
+		zap.String("SQL", sqlStr),
+		zap.Any("Params", sqlParams),
 	)
+
+	rows, err := d.dbTrx.GetSqlDB().QueryContext(ctx, sqlStr, sqlParams...)
 	if err != nil {
+		d.log.Error(ctx, "orderDAO.Search",
+			zap.String("SQL", sqlStr),
+			zap.Any("Params", sqlParams),
+			zap.Error(err),
+		)
 		return nil, err
 	}
 	defer rows.Close()
@@ -126,7 +125,7 @@ func (d orderDAO) Search(ctx context.Context, query entity.OrderQuery) (entity.O
 			&order.PaymentToken,
 			&order.PaymentURL,
 			&order.PaymentTransactionID,
-			&order.PaymentMetadata, // Ambil raw string/bytes JSON
+			&order.PaymentMetadata,
 			&order.PaymentTime,
 			&order.ExpiresAt,
 			&order.DaoEntity.Deleted,
@@ -134,6 +133,7 @@ func (d orderDAO) Search(ctx context.Context, query entity.OrderQuery) (entity.O
 			&order.DaoEntity.CreatedAt,
 			&order.DaoEntity.UpdatedAt,
 		); err != nil {
+			d.log.Error(ctx, "orderDAO.Search.Scan", zap.Error(err))
 			return nil, err
 		}
 
@@ -144,7 +144,6 @@ func (d orderDAO) Search(ctx context.Context, query entity.OrderQuery) (entity.O
 }
 
 func (d orderDAO) Insert(ctx context.Context, orders entity.Orders) error {
-
 	if len(orders) < 1 {
 		return fmt.Errorf("empty order data")
 	}
@@ -170,10 +169,24 @@ func (d orderDAO) Insert(ctx context.Context, orders entity.Orders) error {
 		}
 
 		sqlInsert.SetSQLInsertValue(
-			order.ID, order.RegistrantID, order.OrderNumber, order.Amount, order.Currency,
-			ordNullStr(order.PaymentGateway), ordNullStr(order.PaymentMethod), ordNullStr(order.PaymentChannel), order.PaymentStatus,
-			ordNullStr(order.PaymentToken), ordNullStr(order.PaymentURL), ordNullStr(order.PaymentTransactionID), ordNullStr(order.PaymentMetadata),
-			ordNullTime(order.PaymentTime), ordNullTime(order.ExpiresAt), order.DaoEntity.Deleted, order.DaoEntity.DataHash, order.CreatedAt,
+			order.ID,                   // $1
+			order.RegistrantID,         // $2
+			order.OrderNumber,          // $3
+			order.Amount,               // $4
+			order.Currency,             // $5
+			order.PaymentGateway,       // $6
+			order.PaymentMethod,        // $7
+			order.PaymentChannel,       // $8
+			order.PaymentStatus,        // $9
+			order.PaymentToken,         // $10
+			order.PaymentURL,           // $11
+			order.PaymentTransactionID, // $12
+			order.PaymentMetadata,      // $13
+			order.PaymentTime,          // $14
+			order.ExpiresAt,            // $15
+			order.DaoEntity.Deleted,    // $16
+			order.DaoEntity.DataHash,   // $17
+			order.CreatedAt,            // $18
 		)
 
 		orders[i] = order
@@ -183,13 +196,25 @@ func (d orderDAO) Insert(ctx context.Context, orders entity.Orders) error {
 		SetSQLSchema("public").
 		SetSQLGoInsert(sqlInsert)
 
-	_, err := d.dbTrx.GetSqlTx().ExecContext(
-		ctx,
-		sql.BuildSQL(),
-		sql.GetSQLGoParameter().GetSQLParameter()...,
+	sqlStr := sql.BuildSQL()
+	sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
+
+	d.log.Debug(ctx, "orderDAO.Insert",
+		zap.String("SQL", sqlStr),
+		zap.Any("Params", sqlParams),
 	)
 
-	return err
+	_, err := d.dbTrx.GetSqlTx().ExecContext(ctx, sqlStr, sqlParams...)
+	if err != nil {
+		d.log.Error(ctx, "orderDAO.Insert",
+			zap.String("SQL", sqlStr),
+			zap.Any("Params", sqlParams),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	return nil
 }
 
 func (d orderDAO) Update(ctx context.Context, orders entity.Orders) error {
@@ -221,12 +246,21 @@ func (d orderDAO) Update(ctx context.Context, orders entity.Orders) error {
 			SetSQLUpdateValue("updated_at", order.UpdatedAt).
 			SetSQLWhere("AND", "id", "=", order.ID)
 
-		_, err := d.dbTrx.GetSqlTx().ExecContext(
-			ctx,
-			sql.BuildSQL(),
-			sql.GetSQLGoParameter().GetSQLParameter()...,
+		sqlStr := sql.BuildSQL()
+		sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
+
+		d.log.Debug(ctx, "orderDAO.Update",
+			zap.String("SQL", sqlStr),
+			zap.Any("Params", sqlParams),
 		)
+
+		_, err := d.dbTrx.GetSqlTx().ExecContext(ctx, sqlStr, sqlParams...)
 		if err != nil {
+			d.log.Error(ctx, "orderDAO.Update",
+				zap.String("SQL", sqlStr),
+				zap.Any("Params", sqlParams),
+				zap.Error(err),
+			)
 			return err
 		}
 
@@ -242,13 +276,25 @@ func (d orderDAO) Delete(ctx context.Context, id pubEntity.UUID) error {
 		SetSQLDelete("orders").
 		SetSQLWhere("AND", "id", "=", id)
 
-	_, err := d.dbTrx.GetSqlTx().ExecContext(
-		ctx,
-		sql.BuildSQL(),
-		sql.GetSQLGoParameter().GetSQLParameter()...,
+	sqlStr := sql.BuildSQL()
+	sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
+
+	d.log.Debug(ctx, "orderDAO.Delete",
+		zap.String("SQL", sqlStr),
+		zap.Any("Params", sqlParams),
 	)
 
-	return err
+	_, err := d.dbTrx.GetSqlTx().ExecContext(ctx, sqlStr, sqlParams...)
+	if err != nil {
+		d.log.Error(ctx, "orderDAO.Delete",
+			zap.String("SQL", sqlStr),
+			zap.Any("Params", sqlParams),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	return nil
 }
 
 func (d orderDAO) SoftDelete(ctx context.Context, id pubEntity.UUID) error {
@@ -258,11 +304,23 @@ func (d orderDAO) SoftDelete(ctx context.Context, id pubEntity.UUID) error {
 		SetSQLUpdateValue("deleted", true).
 		SetSQLWhere("AND", "id", "=", id)
 
-	_, err := d.dbTrx.GetSqlTx().ExecContext(
-		ctx,
-		sql.BuildSQL(),
-		sql.GetSQLGoParameter().GetSQLParameter()...,
+	sqlStr := sql.BuildSQL()
+	sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
+
+	d.log.Debug(ctx, "orderDAO.SoftDelete",
+		zap.String("SQL", sqlStr),
+		zap.Any("Params", sqlParams),
 	)
 
-	return err
+	_, err := d.dbTrx.GetSqlTx().ExecContext(ctx, sqlStr, sqlParams...)
+	if err != nil {
+		d.log.Error(ctx, "orderDAO.SoftDelete",
+			zap.String("SQL", sqlStr),
+			zap.Any("Params", sqlParams),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	return nil
 }
