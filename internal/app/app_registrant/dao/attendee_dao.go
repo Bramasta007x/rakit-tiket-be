@@ -19,6 +19,20 @@ type AttendeeDAO interface {
 	SoftDelete(ctx context.Context, id pubEntity.UUID) error
 }
 
+func attNullStr(s *string) interface{} {
+	if s == nil {
+		return nil
+	}
+	return *s
+}
+
+func attNullTime(t *time.Time) interface{} {
+	if t == nil {
+		return nil
+	}
+	return *t
+}
+
 type attendeeDAO struct {
 	dbTrx DBTransaction
 }
@@ -113,9 +127,8 @@ func (d attendeeDAO) Insert(ctx context.Context, attendees entity.Attendees) err
 			"name",
 			"gender",
 			"birthdate",
-			"created_at",
-			"deleted",
 			"data_hash",
+			"created_at",
 		)
 
 	for i, att := range attendees {
@@ -134,11 +147,10 @@ func (d attendeeDAO) Insert(ctx context.Context, attendees entity.Attendees) err
 			att.RegistrantID,
 			att.TicketID,
 			att.Name,
-			att.Gender,
-			att.Birthdate,
-			att.CreatedAt,
-			false, // deleted
-			"-",   // data_hash
+			attNullStr(att.Gender),
+			attNullTime(att.Birthdate),
+			att.DaoEntity.DataHash,
+			att.DaoEntity.CreatedAt,
 		)
 
 		attendees[i] = att

@@ -20,6 +20,20 @@ type OrderDAO interface {
 	SoftDelete(ctx context.Context, id pubEntity.UUID) error
 }
 
+func ordNullStr(s *string) interface{} {
+	if s == nil {
+		return nil
+	}
+	return *s
+}
+
+func ordNullTime(t *time.Time) interface{} {
+	if t == nil {
+		return nil
+	}
+	return *t
+}
+
 type orderDAO struct {
 	dbTrx baseDao.DBTransaction
 }
@@ -157,9 +171,9 @@ func (d orderDAO) Insert(ctx context.Context, orders entity.Orders) error {
 
 		sqlInsert.SetSQLInsertValue(
 			order.ID, order.RegistrantID, order.OrderNumber, order.Amount, order.Currency,
-			order.PaymentGateway, order.PaymentMethod, order.PaymentChannel, order.PaymentStatus,
-			order.PaymentToken, order.PaymentURL, order.PaymentTransactionID, order.PaymentMetadata, // Default kirim null jika belum ada JSON metadata
-			order.PaymentTime, order.ExpiresAt, order.DaoEntity.Deleted, order.DaoEntity.DataHash, order.CreatedAt,
+			ordNullStr(order.PaymentGateway), ordNullStr(order.PaymentMethod), ordNullStr(order.PaymentChannel), order.PaymentStatus,
+			ordNullStr(order.PaymentToken), ordNullStr(order.PaymentURL), ordNullStr(order.PaymentTransactionID), ordNullStr(order.PaymentMetadata),
+			ordNullTime(order.PaymentTime), ordNullTime(order.ExpiresAt), order.DaoEntity.Deleted, order.DaoEntity.DataHash, order.CreatedAt,
 		)
 
 		orders[i] = order

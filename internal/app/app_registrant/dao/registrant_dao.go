@@ -19,6 +19,27 @@ type RegistrantDAO interface {
 	SoftDelete(ctx context.Context, id pubEntity.UUID) error
 }
 
+func nullStr(s *string) interface{} {
+	if s == nil {
+		return nil
+	}
+	return *s
+}
+
+func nullTime(t *time.Time) interface{} {
+	if t == nil {
+		return nil
+	}
+	return *t
+}
+
+func nullUUID(u *pubEntity.UUID) interface{} {
+	if u == nil {
+		return nil
+	}
+	return *u
+}
+
 type registrantDAO struct {
 	dbTrx DBTransaction
 }
@@ -94,12 +115,12 @@ func (d registrantDAO) Search(ctx context.Context, query entity.RegistrantQuery)
 		if err := rows.Scan(
 			&reg.ID,
 			&reg.UniqueCode,
-			&reg.TicketID,
+			nullUUID(reg.TicketID),
 			&reg.Name,
 			&reg.Email,
 			&reg.Phone,
-			&reg.Gender,
-			&reg.Birthdate,
+			nullStr(reg.Gender),
+			nullTime(reg.Birthdate),
 			&reg.TotalCost,
 			&reg.TotalTickets,
 			&reg.Status,
@@ -135,9 +156,8 @@ func (d registrantDAO) Insert(ctx context.Context, registrants entity.Registrant
 			"total_cost",
 			"total_tickets",
 			"status",
-			"created_at",
-			"deleted",
 			"data_hash",
+			"created_at",
 		)
 
 	for i, reg := range registrants {
@@ -163,9 +183,8 @@ func (d registrantDAO) Insert(ctx context.Context, registrants entity.Registrant
 			reg.TotalCost,
 			reg.TotalTickets,
 			reg.Status,
-			reg.CreatedAt,
-			false, // deleted default false
-			"-",   // data_hash placeholder
+			reg.DaoEntity.DataHash,
+			reg.DaoEntity.CreatedAt,
 		)
 
 		registrants[i] = reg
