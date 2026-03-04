@@ -158,9 +158,8 @@ func (d orderDAO) Insert(ctx context.Context, orders entity.Orders) error {
 		SetSQLInsert("orders").
 		SetSQLInsertColumn(
 			"id", "event_id", "registrant_id", "order_number", "amount", "currency",
-			"payment_gateway", "payment_method", "payment_channel", "payment_status",
-			"payment_token", "payment_url", "payment_transaction_id", "payment_metadata",
-			"payment_time", "expires_at", "deleted", "data_hash", "created_at",
+			"payment_gateway", "payment_status", "payment_token", "payment_url",
+			"expires_at", "deleted", "data_hash", "created_at",
 		)
 
 	for i, order := range orders {
@@ -182,14 +181,9 @@ func (d orderDAO) Insert(ctx context.Context, orders entity.Orders) error {
 			order.Amount,
 			order.Currency,
 			order.PaymentGateway,
-			order.PaymentMethod,
-			order.PaymentChannel,
 			order.PaymentStatus,
 			order.PaymentToken,
 			order.PaymentURL,
-			order.PaymentTransactionID,
-			order.PaymentMetadata,
-			order.PaymentTime,
 			order.ExpiresAt,
 			order.DaoEntity.Deleted,
 			order.DaoEntity.DataHash,
@@ -225,7 +219,6 @@ func (d orderDAO) Insert(ctx context.Context, orders entity.Orders) error {
 }
 
 func (d orderDAO) Update(ctx context.Context, orders entity.Orders) error {
-
 	if len(orders) < 1 {
 		return fmt.Errorf("empty order data")
 	}
@@ -240,19 +233,39 @@ func (d orderDAO) Update(ctx context.Context, orders entity.Orders) error {
 			SetSQLUpdateValue("event_id", order.EventID).
 			SetSQLUpdateValue("amount", order.Amount).
 			SetSQLUpdateValue("currency", order.Currency).
-			SetSQLUpdateValue("payment_gateway", order.PaymentGateway).
-			SetSQLUpdateValue("payment_method", order.PaymentMethod).
-			SetSQLUpdateValue("payment_channel", order.PaymentChannel).
 			SetSQLUpdateValue("payment_status", order.PaymentStatus).
-			SetSQLUpdateValue("payment_token", order.PaymentToken).
-			SetSQLUpdateValue("payment_url", order.PaymentURL).
-			SetSQLUpdateValue("payment_transaction_id", order.PaymentTransactionID).
-			SetSQLUpdateValue("payment_metadata", order.PaymentMetadata).
-			SetSQLUpdateValue("payment_time", order.PaymentTime).
-			SetSQLUpdateValue("expires_at", order.ExpiresAt).
 			SetSQLUpdateValue("data_hash", order.DataHash).
-			SetSQLUpdateValue("updated_at", order.UpdatedAt).
-			SetSQLWhere("AND", "id", "=", order.ID)
+			SetSQLUpdateValue("updated_at", order.UpdatedAt)
+
+		if order.PaymentGateway != nil {
+			sql.SetSQLUpdateValue("payment_gateway", order.PaymentGateway)
+		}
+		if order.PaymentMethod != nil {
+			sql.SetSQLUpdateValue("payment_method", order.PaymentMethod)
+		}
+		if order.PaymentChannel != nil {
+			sql.SetSQLUpdateValue("payment_channel", order.PaymentChannel)
+		}
+		if order.PaymentToken != nil {
+			sql.SetSQLUpdateValue("payment_token", order.PaymentToken)
+		}
+		if order.PaymentURL != nil {
+			sql.SetSQLUpdateValue("payment_url", order.PaymentURL)
+		}
+		if order.PaymentTransactionID != nil {
+			sql.SetSQLUpdateValue("payment_transaction_id", order.PaymentTransactionID)
+		}
+		if order.PaymentMetadata != nil {
+			sql.SetSQLUpdateValue("payment_metadata", order.PaymentMetadata)
+		}
+		if order.PaymentTime != nil {
+			sql.SetSQLUpdateValue("payment_time", order.PaymentTime)
+		}
+		if order.ExpiresAt != nil {
+			sql.SetSQLUpdateValue("expires_at", order.ExpiresAt)
+		}
+
+		sql.SetSQLWhere("AND", "id", "=", order.ID)
 
 		sqlStr := sql.BuildSQL()
 		sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
