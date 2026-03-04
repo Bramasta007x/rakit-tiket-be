@@ -8,10 +8,10 @@ import (
 	baseDao "rakit-tiket-be/internal/pkg/dao"
 	pubEntity "rakit-tiket-be/pkg/entity"
 	entity "rakit-tiket-be/pkg/entity/app_order"
-	"rakit-tiket-be/pkg/util" // Import util untuk logging
+	"rakit-tiket-be/pkg/util"
 
 	"gitlab.com/threetopia/sqlgo/v2"
-	"go.uber.org/zap" // Import zap untuk structured logging
+	"go.uber.org/zap"
 )
 
 type OrderDAO interface {
@@ -23,7 +23,7 @@ type OrderDAO interface {
 }
 
 type orderDAO struct {
-	log   util.LogUtil // Tambahkan logger
+	log   util.LogUtil
 	dbTrx baseDao.DBTransaction
 }
 
@@ -38,6 +38,7 @@ func (d orderDAO) Search(ctx context.Context, query entity.OrderQuery) (entity.O
 
 	sqlSelect := sqlgo.NewSQLGoSelect().
 		SetSQLSelect("o.id", "id").
+		SetSQLSelect("o.event_id", "event_id").
 		SetSQLSelect("o.registrant_id", "registrant_id").
 		SetSQLSelect("o.order_number", "order_number").
 		SetSQLSelect("o.amount", "amount").
@@ -69,6 +70,10 @@ func (d orderDAO) Search(ctx context.Context, query entity.OrderQuery) (entity.O
 
 	if len(query.RegistrantIDs) > 0 {
 		sqlWhere.SetSQLWhere("AND", "o.registrant_id", "IN", query.RegistrantIDs)
+	}
+
+	if len(query.EventIDs) > 0 {
+		sqlWhere.SetSQLWhere("AND", "o.event_id", "IN", query.EventIDs)
 	}
 
 	if len(query.OrderNumbers) > 0 {
@@ -114,6 +119,7 @@ func (d orderDAO) Search(ctx context.Context, query entity.OrderQuery) (entity.O
 
 		if err := rows.Scan(
 			&order.ID,
+			&order.EventID,
 			&order.RegistrantID,
 			&order.OrderNumber,
 			&order.Amount,
@@ -151,7 +157,7 @@ func (d orderDAO) Insert(ctx context.Context, orders entity.Orders) error {
 	sqlInsert := sqlgo.NewSQLGoInsert().
 		SetSQLInsert("orders").
 		SetSQLInsertColumn(
-			"id", "registrant_id", "order_number", "amount", "currency",
+			"id", "event_id", "registrant_id", "order_number", "amount", "currency",
 			"payment_gateway", "payment_method", "payment_channel", "payment_status",
 			"payment_token", "payment_url", "payment_transaction_id", "payment_metadata",
 			"payment_time", "expires_at", "deleted", "data_hash", "created_at",
@@ -169,24 +175,25 @@ func (d orderDAO) Insert(ctx context.Context, orders entity.Orders) error {
 		}
 
 		sqlInsert.SetSQLInsertValue(
-			order.ID,                   // $1
-			order.RegistrantID,         // $2
-			order.OrderNumber,          // $3
-			order.Amount,               // $4
-			order.Currency,             // $5
-			order.PaymentGateway,       // $6
-			order.PaymentMethod,        // $7
-			order.PaymentChannel,       // $8
-			order.PaymentStatus,        // $9
-			order.PaymentToken,         // $10
-			order.PaymentURL,           // $11
-			order.PaymentTransactionID, // $12
-			order.PaymentMetadata,      // $13
-			order.PaymentTime,          // $14
-			order.ExpiresAt,            // $15
-			order.DaoEntity.Deleted,    // $16
-			order.DaoEntity.DataHash,   // $17
-			order.CreatedAt,            // $18
+			order.ID,
+			order.EventID,
+			order.RegistrantID,
+			order.OrderNumber,
+			order.Amount,
+			order.Currency,
+			order.PaymentGateway,
+			order.PaymentMethod,
+			order.PaymentChannel,
+			order.PaymentStatus,
+			order.PaymentToken,
+			order.PaymentURL,
+			order.PaymentTransactionID,
+			order.PaymentMetadata,
+			order.PaymentTime,
+			order.ExpiresAt,
+			order.DaoEntity.Deleted,
+			order.DaoEntity.DataHash,
+			order.CreatedAt,
 		)
 
 		orders[i] = order
@@ -230,6 +237,7 @@ func (d orderDAO) Update(ctx context.Context, orders entity.Orders) error {
 		sql := sqlgo.NewSQLGo().
 			SetSQLSchema("public").
 			SetSQLUpdate("orders").
+			SetSQLUpdateValue("event_id", order.EventID).
 			SetSQLUpdateValue("amount", order.Amount).
 			SetSQLUpdateValue("currency", order.Currency).
 			SetSQLUpdateValue("payment_gateway", order.PaymentGateway).

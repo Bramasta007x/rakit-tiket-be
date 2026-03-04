@@ -34,6 +34,7 @@ func (d landingPageDAO) Search(ctx context.Context, query entity.LandingPageQuer
 
 	sqlSelect := sqlgo.NewSQLGoSelect().
 		SetSQLSelect("lp.id", "id").
+		SetSQLSelect("lp.event_id", "event_id").
 		// Event Info
 		SetSQLSelect("lp.event_name", "event_name").
 		SetSQLSelect("lp.event_subtitle", "event_subtitle").
@@ -81,6 +82,10 @@ func (d landingPageDAO) Search(ctx context.Context, query entity.LandingPageQuer
 		sqlWhere.SetSQLWhere("AND", "lp.id", "IN", query.IDs)
 	}
 
+	if len(query.EventIDs) > 0 {
+		sqlWhere.SetSQLWhere("AND", "lp.event_id", "IN", query.EventIDs)
+	}
+
 	if len(query.EventName) > 0 {
 		sqlWhere.SetSQLWhere("AND", "lp.event_name", "IN", query.EventName)
 	}
@@ -109,6 +114,7 @@ func (d landingPageDAO) Search(ctx context.Context, query entity.LandingPageQuer
 
 		if err := rows.Scan(
 			&page.ID,
+			&page.EventID,
 			// Event Info
 			&page.EventName,
 			&page.EventSubtitle,
@@ -180,6 +186,7 @@ func (d landingPageDAO) Insert(ctx context.Context, pages entity.LandingPages) e
 		SetSQLInsert("landing_page_configs").
 		SetSQLInsertColumn(
 			"id",
+			"event_id",
 			// Event
 			"event_name",
 			"event_subtitle",
@@ -238,6 +245,7 @@ func (d landingPageDAO) Insert(ctx context.Context, pages entity.LandingPages) e
 
 		sqlInsert.SetSQLInsertValue(
 			page.ID,
+			page.EventID,
 			// Event
 			page.EventName,
 			page.EventSubtitle,
@@ -315,6 +323,7 @@ func (d landingPageDAO) Update(ctx context.Context, pages entity.LandingPages) e
 			SetSQLSchema("public").
 			SetSQLUpdate("landing_page_configs").
 			// Event
+			SetSQLUpdateValue("event_id", page.EventID).
 			SetSQLUpdateValue("event_name", page.EventName).
 			SetSQLUpdateValue("event_subtitle", page.EventSubtitle).
 			SetSQLUpdateValue("event_creator", page.EventCreator).

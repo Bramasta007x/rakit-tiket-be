@@ -15,13 +15,15 @@ const (
 type (
 	TicketQuery struct {
 		IDs       []string       `query:"id"`
+		EventIDs  []string       `query:"event_id"`
 		Types     []string       `query:"type"`
 		IsPresale *bool          `query:"is_presale"`
 		Statuses  []TicketStatus `query:"status"`
 	}
 
 	Ticket struct {
-		ID pubEntity.UUID `json:"id"`
+		ID      pubEntity.UUID `json:"id"`
+		EventID pubEntity.UUID `json:"event_id"`
 
 		// Ticket Info
 		Type        string       `json:"type"` // PRESALE_GOLD, GOLD

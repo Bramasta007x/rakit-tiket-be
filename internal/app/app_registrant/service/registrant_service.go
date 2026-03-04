@@ -101,7 +101,7 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 	orderID := pubEntity.MakeUUID("ORDER", req.Registrant.Email, now.String())
 
 	uniqueCode := fmt.Sprintf("JMF-%d-%05d", now.Year())
-	orderNumber := fmt.Sprintf("JMF%d-%05d", now.Year())
+	orderNumber := fmt.Sprintf("JMF%d-%05d", now.Year(), now.Unix()%100000)
 
 	var regBirthdate *time.Time
 	if req.Registrant.Birthdate != nil && *req.Registrant.Birthdate != "" {

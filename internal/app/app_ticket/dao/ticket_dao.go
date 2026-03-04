@@ -40,6 +40,7 @@ func (d ticketDAO) Search(ctx context.Context, query entity.TicketQuery) (entity
 
 	sqlSelect := sqlgo.NewSQLGoSelect().
 		SetSQLSelect("t.id", "id").
+		SetSQLSelect("t.event_id", "event_id").
 		SetSQLSelect("t.type", "type").
 		SetSQLSelect("t.title", "title").
 		SetSQLSelect("t.status", "status").
@@ -61,6 +62,9 @@ func (d ticketDAO) Search(ctx context.Context, query entity.TicketQuery) (entity
 
 	if len(query.IDs) > 0 {
 		sqlWhere.SetSQLWhere("AND", "t.id", "IN", query.IDs)
+	}
+	if len(query.EventIDs) > 0 {
+		sqlWhere.SetSQLWhere("AND", "t.event_id", "IN", query.EventIDs)
 	}
 	if len(query.Types) > 0 {
 		sqlWhere.SetSQLWhere("AND", "t.type", "IN", query.Types)
@@ -97,7 +101,7 @@ func (d ticketDAO) Search(ctx context.Context, query entity.TicketQuery) (entity
 	for rows.Next() {
 		var ticket entity.Ticket
 		if err := rows.Scan(
-			&ticket.ID, &ticket.Type, &ticket.Title, &ticket.Status,
+			&ticket.ID, &ticket.EventID, &ticket.Type, &ticket.Title, &ticket.Status,
 			&ticket.Description, &ticket.Price, &ticket.Total,
 			&ticket.AvailableQty, &ticket.BookedQty, &ticket.SoldQty,
 			&ticket.IsPresale, &ticket.OrderPriority,
@@ -120,9 +124,9 @@ func (d ticketDAO) Insert(ctx context.Context, tickets entity.Tickets) error {
 	sqlInsert := sqlgo.NewSQLGoInsert().
 		SetSQLInsert("tickets").
 		SetSQLInsertColumn(
-			"id", "type", "title", "status", "description", "price", "total",
+			"id", "event_id", "type", "title", "status", "description", "price", "total",
 			"available_qty", "booked_qty", "sold_qty", "is_presale",
-			"order_priority", "created_at",
+			"order_priority", "data_hash", "created_at",
 		)
 
 	for i, ticket := range tickets {
@@ -131,32 +135,19 @@ func (d ticketDAO) Insert(ctx context.Context, tickets entity.Tickets) error {
 			ticket.ID = pubEntity.MakeUUID(ticket.Type, ticket.CreatedAt.String())
 		}
 		sqlInsert.SetSQLInsertValue(
-			ticket.ID, ticket.Type, ticket.Title, ticket.Status, ticket.Description,
+			ticket.ID, ticket.EventID, ticket.Type, ticket.Title, ticket.Status, ticket.Description,
 			ticket.Price, ticket.Total, ticket.AvailableQty, ticket.BookedQty,
-			ticket.SoldQty, ticket.IsPresale, ticket.OrderPriority, ticket.CreatedAt,
+			ticket.SoldQty, ticket.IsPresale, ticket.OrderPriority, ticket.DataHash, ticket.CreatedAt,
 		)
 		tickets[i] = ticket
 	}
 
 	sql := sqlgo.NewSQLGo().SetSQLSchema("public").SetSQLGoInsert(sqlInsert)
-	sqlStr := sql.BuildSQL()
-	sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
-
-	d.log.Debug(ctx, "ticketDAO.Insert", zap.String("SQL", sqlStr), zap.Int("Count", len(tickets)))
-
-	_, err := d.dbTrx.GetSqlTx().ExecContext(ctx, sqlStr, sqlParams...)
-	if err != nil {
-		d.log.Error(ctx, "ticketDAO.Insert", zap.Error(err))
-		return err
-	}
-	return nil
+	_, err := d.dbTrx.GetSqlTx().ExecContext(ctx, sql.BuildSQL(), sql.GetSQLGoParameter().GetSQLParameter()...)
+	return err
 }
 
 func (d ticketDAO) Update(ctx context.Context, tickets entity.Tickets) error {
-	if len(tickets) < 1 {
-		return fmt.Errorf("empty ticket data")
-	}
-
 	for i, ticket := range tickets {
 		now := time.Now()
 		ticket.UpdatedAt = &now
@@ -164,6 +155,7 @@ func (d ticketDAO) Update(ctx context.Context, tickets entity.Tickets) error {
 		sql := sqlgo.NewSQLGo().
 			SetSQLSchema("public").
 			SetSQLUpdate("tickets").
+			SetSQLUpdateValue("event_id", ticket.EventID).
 			SetSQLUpdateValue("type", ticket.Type).
 			SetSQLUpdateValue("title", ticket.Title).
 			SetSQLUpdateValue("status", ticket.Status).
@@ -175,17 +167,12 @@ func (d ticketDAO) Update(ctx context.Context, tickets entity.Tickets) error {
 			SetSQLUpdateValue("sold_qty", ticket.SoldQty).
 			SetSQLUpdateValue("is_presale", ticket.IsPresale).
 			SetSQLUpdateValue("order_priority", ticket.OrderPriority).
+			SetSQLUpdateValue("data_hash", ticket.DataHash).
 			SetSQLUpdateValue("updated_at", ticket.UpdatedAt).
 			SetSQLWhere("AND", "id", "=", ticket.ID)
 
-		sqlStr := sql.BuildSQL()
-		sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
-
-		d.log.Debug(ctx, "ticketDAO.Update", zap.String("ID", string(ticket.ID)))
-
-		_, err := d.dbTrx.GetSqlTx().ExecContext(ctx, sqlStr, sqlParams...)
+		_, err := d.dbTrx.GetSqlTx().ExecContext(ctx, sql.BuildSQL(), sql.GetSQLGoParameter().GetSQLParameter()...)
 		if err != nil {
-			d.log.Error(ctx, "ticketDAO.Update", zap.Error(err))
 			return err
 		}
 		tickets[i] = ticket

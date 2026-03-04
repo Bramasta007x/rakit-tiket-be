@@ -7,11 +7,13 @@ import (
 type (
 	LandingPageQuery struct {
 		IDs       []string `query:"id"`
+		EventIDs  []string `query:"event_id"`
 		EventName []string `query:"event_name"`
 	}
 
 	LandingPage struct {
-		ID pubEntity.UUID `json:"id"`
+		ID      pubEntity.UUID `json:"id"`
+		EventID pubEntity.UUID `json:"event_id"`
 
 		// Event Info
 		EventName      string  `json:"event_name"`

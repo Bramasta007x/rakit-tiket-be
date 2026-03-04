@@ -37,6 +37,7 @@ func (d attendeeDAO) Search(ctx context.Context, query entity.AttendeeQuery) (en
 
 	sqlSelect := sqlgo.NewSQLGoSelect().
 		SetSQLSelect("a.id", "id").
+		SetSQLSelect("a.event_id", "event_id").
 		SetSQLSelect("a.registrant_id", "registrant_id").
 		SetSQLSelect("a.ticket_id", "ticket_id").
 		SetSQLSelect("a.name", "name").
@@ -53,6 +54,9 @@ func (d attendeeDAO) Search(ctx context.Context, query entity.AttendeeQuery) (en
 
 	if len(query.IDs) > 0 {
 		sqlWhere.SetSQLWhere("AND", "a.id", "IN", query.IDs)
+	}
+	if len(query.EventIDs) > 0 {
+		sqlWhere.SetSQLWhere("AND", "a.event_id", "IN", query.EventIDs)
 	}
 	if len(query.RegistrantIDs) > 0 {
 		sqlWhere.SetSQLWhere("AND", "a.registrant_id", "IN", query.RegistrantIDs)
@@ -92,6 +96,7 @@ func (d attendeeDAO) Search(ctx context.Context, query entity.AttendeeQuery) (en
 
 		if err := rows.Scan(
 			&att.ID,
+			&att.EventID,
 			&att.RegistrantID,
 			&att.TicketID,
 			&att.Name,
@@ -120,6 +125,7 @@ func (d attendeeDAO) Insert(ctx context.Context, attendees entity.Attendees) err
 		SetSQLInsert("attendees").
 		SetSQLInsertColumn(
 			"id",
+			"event_id",
 			"registrant_id",
 			"ticket_id",
 			"name",
@@ -142,6 +148,7 @@ func (d attendeeDAO) Insert(ctx context.Context, attendees entity.Attendees) err
 
 		sqlInsert.SetSQLInsertValue(
 			att.ID,
+			att.EventID,
 			att.RegistrantID,
 			att.TicketID,
 			att.Name,
@@ -181,47 +188,29 @@ func (d attendeeDAO) Insert(ctx context.Context, attendees entity.Attendees) err
 }
 
 func (d attendeeDAO) Update(ctx context.Context, attendees entity.Attendees) error {
-
-	if len(attendees) < 1 {
-		return fmt.Errorf("empty attendee data")
-	}
-
 	for i, att := range attendees {
-
 		now := time.Now()
 		att.UpdatedAt = &now
 
 		sql := sqlgo.NewSQLGo().
 			SetSQLSchema("public").
 			SetSQLUpdate("attendees").
+			SetSQLUpdateValue("event_id", att.EventID).
+			SetSQLUpdateValue("registrant_id", att.RegistrantID).
+			SetSQLUpdateValue("ticket_id", att.TicketID).
 			SetSQLUpdateValue("name", att.Name).
 			SetSQLUpdateValue("gender", att.Gender).
 			SetSQLUpdateValue("birthdate", att.Birthdate).
-			SetSQLUpdateValue("ticket_id", att.TicketID).
+			SetSQLUpdateValue("data_hash", att.DataHash).
 			SetSQLUpdateValue("updated_at", att.UpdatedAt).
 			SetSQLWhere("AND", "id", "=", att.ID)
 
-		sqlStr := sql.BuildSQL()
-		sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
-
-		d.log.Debug(ctx, "attendeeDAO.Update",
-			zap.String("SQL", sqlStr),
-			zap.Any("Params", sqlParams),
-		)
-
-		_, err := d.dbTrx.GetSqlTx().ExecContext(ctx, sqlStr, sqlParams...)
+		_, err := d.dbTrx.GetSqlTx().ExecContext(ctx, sql.BuildSQL(), sql.GetSQLGoParameter().GetSQLParameter()...)
 		if err != nil {
-			d.log.Error(ctx, "attendeeDAO.Update",
-				zap.String("SQL", sqlStr),
-				zap.Any("Params", sqlParams),
-				zap.Error(err),
-			)
 			return err
 		}
-
 		attendees[i] = att
 	}
-
 	return nil
 }
 

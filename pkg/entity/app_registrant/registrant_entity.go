@@ -9,13 +9,16 @@ import (
 type (
 	RegistrantQuery struct {
 		IDs         []string `query:"id"`
+		EventIDs    []string `query:"event_id"`
+		TicketIDs   []string `query:"ticket_id"`
 		UniqueCodes []string `query:"unique_code"`
 		Emails      []string `query:"email"`
 		Statuses    []string `query:"status"`
 	}
 
 	Registrant struct {
-		ID pubEntity.UUID `json:"id"`
+		ID      pubEntity.UUID `json:"id"`
+		EventID pubEntity.UUID `json:"event_id"`
 
 		// Registrant Info
 		UniqueCode string          `json:"unique_code"`

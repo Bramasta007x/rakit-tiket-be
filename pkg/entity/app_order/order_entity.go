@@ -9,6 +9,7 @@ import (
 type (
 	OrderQuery struct {
 		IDs             []string `query:"id"`
+		EventIDs        []string `query:"event_id"`
 		OrderNumbers    []string `query:"order_number"`
 		RegistrantIDs   []string `query:"registrant_id"`
 		PaymentGateways []string `query:"payment_gateway"`
@@ -16,7 +17,8 @@ type (
 	}
 
 	Order struct {
-		ID pubEntity.UUID `json:"id"`
+		ID      pubEntity.UUID `json:"id"`
+		EventID pubEntity.UUID `json:"event_id"`
 
 		// Relations
 		RegistrantID pubEntity.UUID `json:"registrant_id"`

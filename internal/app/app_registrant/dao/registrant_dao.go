@@ -22,7 +22,7 @@ type RegistrantDAO interface {
 }
 
 type registrantDAO struct {
-	log   util.LogUtil // Tambahkan field log
+	log   util.LogUtil
 	dbTrx DBTransaction
 }
 
@@ -37,6 +37,7 @@ func (d registrantDAO) Search(ctx context.Context, query entity.RegistrantQuery)
 
 	sqlSelect := sqlgo.NewSQLGoSelect().
 		SetSQLSelect("r.id", "id").
+		SetSQLSelect("r.event_id", "event_id").
 		SetSQLSelect("r.unique_code", "unique_code").
 		SetSQLSelect("r.ticket_id", "ticket_id").
 		SetSQLSelect("r.name", "name").
@@ -59,6 +60,10 @@ func (d registrantDAO) Search(ctx context.Context, query entity.RegistrantQuery)
 
 	if len(query.IDs) > 0 {
 		sqlWhere.SetSQLWhere("AND", "r.id", "IN", query.IDs)
+	}
+
+	if len(query.EventIDs) > 0 {
+		sqlWhere.SetSQLWhere("AND", "r.event_id", "IN", query.EventIDs)
 	}
 
 	if len(query.UniqueCodes) > 0 {
@@ -104,6 +109,7 @@ func (d registrantDAO) Search(ctx context.Context, query entity.RegistrantQuery)
 
 		if err := rows.Scan(
 			&reg.ID,
+			&reg.EventID,
 			&reg.UniqueCode,
 			&reg.TicketID,
 			&reg.Name,
@@ -137,6 +143,7 @@ func (d registrantDAO) Insert(ctx context.Context, registrants entity.Registrant
 		SetSQLInsert("registrants").
 		SetSQLInsertColumn(
 			"id",
+			"event_id",
 			"unique_code",
 			"ticket_id",
 			"name",
@@ -164,6 +171,7 @@ func (d registrantDAO) Insert(ctx context.Context, registrants entity.Registrant
 
 		sqlInsert.SetSQLInsertValue(
 			reg.ID,
+			reg.EventID,
 			reg.UniqueCode,
 			reg.TicketID,
 			reg.Name,
@@ -220,6 +228,7 @@ func (d registrantDAO) Update(ctx context.Context, registrants entity.Registrant
 		sql := sqlgo.NewSQLGo().
 			SetSQLSchema("public").
 			SetSQLUpdate("registrants").
+			SetSQLUpdateValue("event_id", reg.EventID).
 			SetSQLUpdateValue("ticket_id", reg.TicketID).
 			SetSQLUpdateValue("name", reg.Name).
 			SetSQLUpdateValue("email", reg.Email).
