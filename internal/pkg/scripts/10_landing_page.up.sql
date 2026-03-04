@@ -1,8 +1,14 @@
--- Drop table if exists
--- DROP TABLE IF EXISTS landing_page_configs;
+-- landing_page_configs definition
+
+-- Drop table
+
+-- DROP TABLE landing_page_configs;
 
 CREATE TABLE landing_page_configs (
     id uuid NOT NULL,
+    
+    -- Relation
+    event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
 
     -- Event Info
     event_name varchar NOT NULL,
@@ -55,3 +61,4 @@ CREATE TABLE landing_page_configs (
 CREATE INDEX idx_landing_page_configs_deleted ON landing_page_configs (deleted);
 CREATE INDEX idx_landing_page_configs_event_name ON landing_page_configs (event_name);
 CREATE INDEX idx_landing_page_configs_created_at ON landing_page_configs (created_at);
+CREATE INDEX idx_lp_configs_event_id ON landing_page_configs(event_id);

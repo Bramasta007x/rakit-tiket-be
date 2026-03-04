@@ -1,6 +1,8 @@
--- Drop table if exists
-DROP TABLE IF EXISTS tickets;
+-- tickets definition
 
+-- Drop table
+
+-- DROP TABLE tickets;
 DROP TYPE IF EXISTS ticket_status_enum;
 
 CREATE TYPE ticket_status_enum AS ENUM (
@@ -11,6 +13,9 @@ CREATE TYPE ticket_status_enum AS ENUM (
 
 CREATE TABLE tickets (
     id uuid NOT NULL,
+    
+     -- Relation
+    event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
 
     -- Ticket Info
     "type" varchar NOT NULL,             -- SILVER, GOLD, FESTIVAL
@@ -53,7 +58,8 @@ CREATE TABLE tickets (
 );
 
 -- Indexes for Faster Search
-CREATE INDEX idx_tickets_type ON tickets ("type");
-CREATE INDEX idx_tickets_status ON tickets (status);
-CREATE INDEX idx_tickets_is_presale ON tickets (is_presale);
-CREATE INDEX idx_tickets_created_at ON tickets (created_at);
+CREATE INDEX IF NOT EXISTS idx_tickets_type ON tickets ("type");
+CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets (status);
+CREATE INDEX IF NOT EXISTS idx_tickets_is_presale ON tickets (is_presale);
+CREATE INDEX IF NOT EXISTS idx_tickets_created_at ON tickets (created_at);
+CREATE INDEX IF NOT EXISTS idx_tickets_event_id ON tickets (event_id);

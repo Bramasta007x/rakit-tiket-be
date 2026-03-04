@@ -1,6 +1,16 @@
+-- orders definition
+
+-- Drop table
+
+-- DROP TABLE orders;
+
 CREATE TABLE orders (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id uuid NOT NULL,
+    
+    -- Relation
+    event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
     registrant_id UUID NOT NULL REFERENCES registrants(id) ON DELETE CASCADE,
+
     order_number VARCHAR(255) NOT NULL UNIQUE,
     amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
     currency VARCHAR(10) DEFAULT 'IDR',
@@ -24,5 +34,13 @@ CREATE TABLE orders (
     deleted BOOLEAN DEFAULT FALSE,
     data_hash VARCHAR DEFAULT '-',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT orders_pkey PRIMARY KEY (id)
 );
+
+-- Indexes for Faster Search
+CREATE INDEX idx_orders_event_id ON orders(event_id);
+CREATE INDEX idx_orders_registrant_id ON orders(registrant_id);
+CREATE INDEX idx_orders_payment_status ON orders(payment_status);
+CREATE INDEX idx_orders_payment_gateway ON orders(payment_gateway);
