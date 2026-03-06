@@ -10,6 +10,7 @@ import (
 	"rakit-tiket-be/internal/app/app_registrant/dao"
 	"rakit-tiket-be/internal/pkg/payment"
 	pubEntity "rakit-tiket-be/pkg/entity"
+	eventEntity "rakit-tiket-be/pkg/entity/app_event"
 	orderEntity "rakit-tiket-be/pkg/entity/app_order"
 	regEntity "rakit-tiket-be/pkg/entity/app_registrant"
 	ticketEntity "rakit-tiket-be/pkg/entity/app_ticket"
@@ -36,11 +37,7 @@ func MakeRegistrantService(log util.LogUtil, sqlDB *sql.DB, paymentFactory *paym
 }
 
 func (s registrantService) Register(ctx context.Context, req model.RegisterRequest) (*model.RegisterResponse, error) {
-	// 1. Validasi Maksimal Tiket (Termasuk Registrant)
 	totalRequestedTickets := 1 + len(req.Attendees)
-	if totalRequestedTickets > 4 {
-		return nil, errors.New("maksimal 4 tiket per registrasi (termasuk registrant)")
-	}
 
 	// Grouping tiket untuk efisiensi atomic update
 	ticketQtyMap := make(map[string]int)
@@ -54,22 +51,41 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 		ticketIDs = append(ticketIDs, string(att.TicketID))
 	}
 
-	// 4. Masukkan s.log sebagai argumen kedua (Memperbaiki ERROR)
 	dbTrx := dao.NewTransactionRegistrant(ctx, s.log, s.sqlDB)
 	defer dbTrx.GetSqlTx().Rollback()
 
-	// 3. Cari Order berdasarkan OrderNumber
+	// Cari Order berdasarkan OrderNumber
 	tickets, err := dbTrx.GetTicketDAO().Search(ctx, ticketEntity.TicketQuery{IDs: ticketIDs})
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch tickets: %v", err)
 	}
 
+	// Buat Map Tiket dan Pastikan Semua Tiket dari Event yang Sama
 	ticketMap := make(map[string]ticketEntity.Ticket)
-	for _, t := range tickets {
+	var eventID pubEntity.UUID
+
+	for i, t := range tickets {
 		ticketMap[string(t.ID)] = t
+		if i == 0 {
+			eventID = t.EventID
+		} else if t.EventID != eventID {
+			return nil, errors.New("semua tiket dalam satu transaksi harus berasal dari event yang sama")
+		}
 	}
 
-	// 4. ATOMIC BOOKING STOCK & Mapping Payment
+	// Ambil Konfigurasi Event
+	events, err := dbTrx.GetEventDAO().Search(ctx, eventEntity.EventQuery{IDs: []string{string(eventID)}})
+	if err != nil || len(events) == 0 {
+		return nil, errors.New("event tidak ditemukan")
+	}
+	eventData := events[0]
+
+	// Validasi Dinamis Maksimal Tiket Berdasarkan Event
+	if totalRequestedTickets > eventData.MaxTicketPerTx {
+		return nil, fmt.Errorf("maksimal %d tiket per registrasi untuk event ini", eventData.MaxTicketPerTx)
+	}
+
+	// ATOMIC BOOKING STOCK & Mapping Payment
 	var totalCost float64
 	var paymentItems []payment.Item
 
@@ -95,13 +111,19 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 		})
 	}
 
-	// 5. Generate Identifier
+	// Generate Identifier Dinamis (Menggunakan Prefix dari Event)
 	now := time.Now()
 	registrantID := pubEntity.MakeUUID(req.Registrant.Email, now.String())
 	orderID := pubEntity.MakeUUID("ORDER", req.Registrant.Email, now.String())
 
-	uniqueCode := fmt.Sprintf("JMF-%d-%05d", now.Year())
-	orderNumber := fmt.Sprintf("JMF%d-%05d", now.Year(), now.Unix()%100000)
+	// Default fallback misal prefix kosong, namun di database sudah 'NOT NULL'
+	prefix := eventData.TicketPrefixCode
+	if prefix == "" {
+		prefix = "TKT"
+	}
+
+	uniqueCode := fmt.Sprintf("%s-%d-%05d", prefix, now.Year(), now.Unix()%100000)
+	orderNumber := fmt.Sprintf("%s%d-%05d", prefix, now.Year(), now.Unix()%100000)
 
 	var regBirthdate *time.Time
 	if req.Registrant.Birthdate != nil && *req.Registrant.Birthdate != "" {
@@ -109,9 +131,10 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 		regBirthdate = &t
 	}
 
-	// 6. Insert Data Registrant
+	// Insert Data Registrant
 	registrant := regEntity.Registrant{
 		ID:           registrantID,
+		EventID:      eventID,
 		UniqueCode:   uniqueCode,
 		TicketID:     &req.Registrant.TicketID,
 		Name:         req.Registrant.Name,
@@ -129,7 +152,7 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 		return nil, err
 	}
 
-	// 7. Insert Data Attendees
+	// Insert Data Attendees
 	var attendees []regEntity.Attendee
 	for _, att := range req.Attendees {
 		var attBirthdate *time.Time
@@ -140,6 +163,7 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 
 		attendees = append(attendees, regEntity.Attendee{
 			ID:           pubEntity.MakeUUID(att.Name, string(att.TicketID), now.String()),
+			EventID:      eventID,
 			RegistrantID: registrantID,
 			TicketID:     att.TicketID,
 			Name:         att.Name,
@@ -154,7 +178,7 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 		}
 	}
 
-	// 8. Panggil Payment Gateway via Factory
+	// Panggil Payment Gateway via Factory
 	paymentProvider, err := s.paymentFactory.GetProvider(payment.GatewayMidtrans)
 	if err != nil {
 		return nil, err
@@ -173,12 +197,13 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 		return nil, fmt.Errorf("payment gateway error: %v", err)
 	}
 
-	// 9. Insert Data Order dengan URL Midtrans
+	// Insert Data Order dengan URL Midtrans
 	gateway := string(payment.GatewayMidtrans)
 	expiresAt := now.Add(30 * time.Minute)
 
 	order := orderEntity.Order{
 		ID:             orderID,
+		EventID:        eventID,
 		RegistrantID:   registrantID,
 		OrderNumber:    orderNumber,
 		Amount:         totalCost,
@@ -195,7 +220,6 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 		return nil, err
 	}
 
-	// 10. Commit Semua Perubahan!
 	if err := dbTrx.GetSqlTx().Commit(); err != nil {
 		return nil, err
 	}
