@@ -80,7 +80,7 @@ func (m *midtransProvider) CreateTransaction(ctx context.Context, req CreateTran
 // Implementasi fungsi Webhook
 func (m *midtransProvider) ParseWebhook(ctx context.Context, payload []byte) (*WebhookNotification, error) {
 	var notif map[string]interface{}
-	if err := json.Unmarshal(payload, notif); err != nil {
+	if err := json.Unmarshal(payload, &notif); err != nil {
 		return nil, err
 	}
 

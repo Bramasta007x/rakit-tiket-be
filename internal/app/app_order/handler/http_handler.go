@@ -2,6 +2,7 @@ package handler
 
 import (
 	"rakit-tiket-be/internal/app/app_order/service"
+	"rakit-tiket-be/pkg/util"
 
 	"github.com/labstack/echo/v4"
 )
@@ -15,10 +16,10 @@ type httpHandler struct {
 	orderHandler OrderHandler
 }
 
-func MakeHttpAdapter(orderService service.OrderService) HttpHandler {
+func MakeHttpAdapter(log util.LogUtil, orderService service.OrderService) HttpHandler {
 	return httpHandler{
 		orderService: orderService,
-		orderHandler: MakeOrderHandler(orderService),
+		orderHandler: MakeOrderHandler(log, orderService),
 	}
 }
 
