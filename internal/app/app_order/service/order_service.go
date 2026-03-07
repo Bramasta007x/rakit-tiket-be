@@ -8,6 +8,7 @@ import (
 	"time"
 
 	regDao "rakit-tiket-be/internal/app/app_registrant/dao"
+	"rakit-tiket-be/internal/pkg/email"
 	"rakit-tiket-be/internal/pkg/payment"
 	pubEntity "rakit-tiket-be/pkg/entity"
 	orderEntity "rakit-tiket-be/pkg/entity/app_order"
@@ -15,6 +16,8 @@ import (
 	ticketEntity "rakit-tiket-be/pkg/entity/app_ticket"
 	model "rakit-tiket-be/pkg/model/app_order"
 	"rakit-tiket-be/pkg/util"
+
+	"go.uber.org/zap"
 )
 
 type OrderService interface {
@@ -26,13 +29,15 @@ type orderService struct {
 	log            util.LogUtil
 	sqlDB          *sql.DB
 	paymentFactory *payment.PaymentFactory
+	emailService   email.EmailService
 }
 
-func MakeOrderService(log util.LogUtil, sqlDB *sql.DB, paymentFactory *payment.PaymentFactory) OrderService {
+func MakeOrderService(log util.LogUtil, sqlDB *sql.DB, paymentFactory *payment.PaymentFactory, emailService email.EmailService) OrderService {
 	return orderService{
 		log:            log,
 		sqlDB:          sqlDB,
 		paymentFactory: paymentFactory,
+		emailService:   emailService,
 	}
 }
 
@@ -113,6 +118,58 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 		}
 		orderData.PaymentTime = &now
 
+		// Send Tiket
+		var ticketIDs []string
+		for tID := range ticketQtyMap {
+			ticketIDs = append(ticketIDs, tID)
+		}
+
+		ticketMap := make(map[string]ticketEntity.Ticket)
+		if len(ticketIDs) > 0 {
+			tickets, err := dbTrx.GetTicketDAO().Search(ctx, ticketEntity.TicketQuery{
+				IDs: ticketIDs,
+			})
+
+			if err != nil {
+				// Return error agar webhook Midtrans tetap jalan, cukup log saja
+				s.log.Error(ctx, "Failed to fetch ticket data for PDF", zap.Error(err))
+			} else {
+				for _, t := range tickets {
+					ticketMap[string(t.ID)] = t
+				}
+			}
+		}
+
+		eventName := "Rakit Tiket Event"
+
+		attachments, err := GenerateTickets(orderData, registrantData, attendees, ticketMap, eventName)
+		if err != nil {
+			s.log.Error(ctx, "Failed to generate tickets", zap.Error(err))
+		} else {
+			s.log.Info(ctx, "Successfully generated tickets", zap.Int("total", len(attachments)))
+
+			// Mapping struct Attachment dari order module ke email module
+			var emailAtts []email.Attachment
+			for _, att := range attachments {
+				emailAtts = append(emailAtts, email.Attachment{
+					FileName: att.FileName,
+					Data:     att.HTMLData,
+				})
+			}
+
+			// Goroutine agar proses kirim email berjalan di background dan Midtrans cepat mendapat balasan 200 OK
+			go func(targetEmail string, ordNum string, evtName string, atts []email.Attachment) {
+				// Menggunakan context background baru karena request aslinya mungkin sudah terputus
+				bgCtx := context.Background()
+				err := s.emailService.SendTicketEmail(bgCtx, targetEmail, ordNum, evtName, atts)
+				if err != nil {
+					s.log.Error(bgCtx, "Gagal mengirim email asinkronus", zap.Error(err))
+				} else {
+					s.log.Info(bgCtx, "Email E-Ticket berhasil terkirim!", zap.String("to", targetEmail))
+				}
+			}(registrantData.Email, orderData.OrderNumber, eventName, emailAtts)
+		}
+
 	} else if notif.PaymentStatus == "failed" || notif.PaymentStatus == "expired" {
 		for tID, qty := range ticketQtyMap {
 			err := dbTrx.GetTicketDAO().ReleaseBooked(ctx, pubEntity.UUID(tID), qty)
@@ -122,7 +179,7 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 		}
 	}
 
-	// 6. Update Status Utama
+	// Update Status Utama
 	orderData.PaymentStatus = notif.PaymentStatus
 	orderData.PaymentMethod = &notif.PaymentType
 	orderData.PaymentChannel = &notif.PaymentChannel
@@ -131,7 +188,7 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 
 	registrantData.Status = notif.PaymentStatus
 
-	// 7. Simpan Perubahan ke DB
+	// Simpan Perubahan ke DB
 	if err := dbTrx.GetOrderDAO().Update(ctx, []orderEntity.Order{orderData}); err != nil {
 		return err
 	}
@@ -139,7 +196,7 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 		return err
 	}
 
-	// 8. Selesaikan Transaksi
+	// Commit
 	if err := dbTrx.GetSqlTx().Commit(); err != nil {
 		return err
 	}
