@@ -32,6 +32,7 @@ func MakeOrderHandler(log util.LogUtil, orderService service.OrderService) Order
 func (h orderHandler) RegisterRouter(g *echo.Group) {
 	public := g.Group("/v1")
 	public.POST("/webhook/payment/:gateway", h.handleWebhook)
+	public.GET("/orders/:order_number/status", h.getOrderStatus)
 }
 
 func (h orderHandler) handleWebhook(c echo.Context) error {
@@ -62,5 +63,31 @@ func (h orderHandler) handleWebhook(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]string{
 		"message": "Webhook processed successfully",
+	})
+}
+
+func (h orderHandler) getOrderStatus(c echo.Context) error {
+	orderNumber := c.Param("order_number")
+
+	if orderNumber == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "order_number is required")
+	}
+
+	data, err := h.orderService.GetOrderStatus(c.Request().Context(), orderNumber)
+	if err != nil {
+		if err.Error() == "order not found" {
+			return c.JSON(http.StatusNotFound, map[string]interface{}{
+				"success": false,
+				"message": "Order not found",
+			})
+		}
+
+		h.log.Error(c.Request().Context(), "getOrderStatus error", zap.Error(err))
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data":    data,
 	})
 }

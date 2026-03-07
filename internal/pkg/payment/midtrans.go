@@ -89,6 +89,7 @@ func (m *midtransProvider) ParseWebhook(ctx context.Context, payload []byte) (*W
 	transactionID, _ := notif["transaction_id"].(string)
 	transactionStatus, _ := notif["transaction_status"].(string)
 	paymentType, _ := notif["payment_type"].(string)
+	paymentChannel, _ := notif["payment_chanel"].(string)
 
 	// Ubah status midtrans ke status universal
 	var mappedStatus string
@@ -106,11 +107,12 @@ func (m *midtransProvider) ParseWebhook(ctx context.Context, payload []byte) (*W
 	rawPayload, _ := json.Marshal(notif)
 
 	return &WebhookNotification{
-		OrderID:       orderID,
-		TransactionID: transactionID,
-		PaymentStatus: mappedStatus,
-		PaymentType:   paymentType,
-		Gateway:       GatewayMidtrans,
-		RawPayload:    string(rawPayload),
+		OrderID:        orderID,
+		TransactionID:  transactionID,
+		PaymentStatus:  mappedStatus,
+		PaymentType:    paymentType,
+		PaymentChannel: paymentChannel,
+		Gateway:        GatewayMidtrans,
+		RawPayload:     string(rawPayload),
 	}, nil
 }

@@ -40,12 +40,13 @@ type CreateTransactionResponse struct {
 
 // DTO Webhook (Universal)
 type WebhookNotification struct {
-	OrderID       string
-	TransactionID string
-	PaymentStatus string // "paid", "pending", "failed", "expired"
-	PaymentType   string // "bank_transfer", "gopay", "credit_card"
-	Gateway       GatewayType
-	RawPayload    string // Disimpan ke `payment_metadata` untuk tracking
+	OrderID        string
+	TransactionID  string
+	PaymentStatus  string // "paid", "pending", "failed", "expired"
+	PaymentType    string // "bank_transfer", "gopay", "credit_card"
+	PaymentChannel string // "bca_va", "dana", "visa"
+	Gateway        GatewayType
+	RawPayload     string // Disimpan ke `payment_metadata` untuk tracking
 }
 
 // 4. THE STRATEGY INTERFACE
