@@ -3,13 +3,14 @@ package model
 import "time"
 
 type OrderStatusResponse struct {
-	OrderNumber   string           `json:"order_number"`
-	PaymentMethod string           `json:"payment_method"`
-	PaymentStatus string           `json:"payment_status"`
-	Amount        float64          `json:"amount"`
-	PaymentTime   *time.Time       `json:"payment_time"`
-	Registrant    RegistrantStatus `json:"registrant"`
-	Attendees     []AttendeeStatus `json:"attendees"`
+	OrderNumber    string           `json:"order_number"`
+	PaymentMethod  string           `json:"payment_method"`
+	PaymentChannel string           `json:"payment_channel"`
+	PaymentStatus  string           `json:"payment_status"`
+	Amount         float64          `json:"amount"`
+	PaymentTime    *time.Time       `json:"payment_time"`
+	Registrant     RegistrantStatus `json:"registrant"`
+	Attendees      []AttendeeStatus `json:"attendees"`
 }
 
 type RegistrantStatus struct {

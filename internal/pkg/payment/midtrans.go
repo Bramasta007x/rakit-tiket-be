@@ -89,7 +89,30 @@ func (m *midtransProvider) ParseWebhook(ctx context.Context, payload []byte) (*W
 	transactionID, _ := notif["transaction_id"].(string)
 	transactionStatus, _ := notif["transaction_status"].(string)
 	paymentType, _ := notif["payment_type"].(string)
-	paymentChannel, _ := notif["payment_chanel"].(string)
+	paymentChannel := paymentType
+
+	if paymentType == "bank_transfer" {
+		// BCA, BNI, BRI dll biasanya ada di dalam array va_numbers
+		if vaNumbers, ok := notif["va_numbers"].([]interface{}); ok && len(vaNumbers) > 0 {
+			if vaMap, ok := vaNumbers[0].(map[string]interface{}); ok {
+				if bank, ok := vaMap["bank"].(string); ok {
+					paymentChannel = bank
+				}
+			}
+		} else if permataVA, ok := notif["permata_va_number"].(string); ok && permataVA != "" {
+			paymentChannel = "permata"
+		}
+	} else if paymentType == "echannel" {
+		paymentChannel = "mandiri" // Mandiri Bill
+	} else if paymentType == "cstore" {
+		if store, ok := notif["store"].(string); ok {
+			paymentChannel = store // indomaret / alfamart
+		}
+	} else if paymentType == "qris" {
+		if acquirer, ok := notif["acquirer"].(string); ok {
+			paymentChannel = acquirer // gopay / shopeepay
+		}
+	}
 
 	// Ubah status midtrans ke status universal
 	var mappedStatus string

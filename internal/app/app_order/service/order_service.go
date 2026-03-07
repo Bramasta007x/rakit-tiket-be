@@ -125,6 +125,7 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 	// 6. Update Status Utama
 	orderData.PaymentStatus = notif.PaymentStatus
 	orderData.PaymentMethod = &notif.PaymentType
+	orderData.PaymentChannel = &notif.PaymentChannel
 	orderData.PaymentTransactionID = &notif.TransactionID
 	orderData.PaymentMetadata = &notif.RawPayload
 
@@ -255,13 +256,14 @@ func (s orderService) GetOrderStatus(ctx context.Context, orderNumber string) (*
 
 	// Return Response
 	return &model.OrderStatusResponse{
-		OrderNumber:   orderData.OrderNumber,
-		PaymentMethod: *orderData.PaymentMethod,
-		PaymentStatus: orderData.PaymentStatus,
-		Amount:        orderData.Amount,
-		PaymentTime:   orderData.PaymentTime,
-		Registrant:    regStatus,
-		Attendees:     attStatuses,
+		OrderNumber:    orderData.OrderNumber,
+		PaymentMethod:  *orderData.PaymentMethod,
+		PaymentChannel: *orderData.PaymentChannel,
+		PaymentStatus:  orderData.PaymentStatus,
+		Amount:         orderData.Amount,
+		PaymentTime:    orderData.PaymentTime,
+		Registrant:     regStatus,
+		Attendees:      attStatuses,
 	}, nil
 
 }
