@@ -33,6 +33,7 @@ services:
     volumes:
       - ./upload:/app/upload
     environment:
+      CLIENT_ORIGIN_URL: ${CLIENT_ORIGIN_URL}
       DB_HOST: db
       DB_PORT: 5432
       DB_USER: ${DB_USER}
@@ -43,6 +44,14 @@ services:
       LOG_ENVIRONMENT: production
       APP_FILE_PATH: ${APP_FILE_PATH}
       FILE_PATH: ${FILE_PATH}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SENDER_NAME: ${SENDER_NAME}
+      SENDER_EMAIL: ${SENDER_EMAIL}
+      MIDTRANS_SERVER_KEY: ${MIDTRANS_SERVER_KEY}
+      MIDTRANS_ENVIRONMENT: ${MIDTRANS_ENVIRONMENT}
 
   frontend:
     build:

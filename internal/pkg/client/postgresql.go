@@ -2,6 +2,7 @@ package client
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"rakit-tiket-be/pkg/entity"
@@ -68,10 +69,12 @@ func (c postgreSQLClient) Migration() error {
 		"postgres", driver)
 
 	if err != nil {
-		log.Fatalf("Error Open Migration %s", err.Error())
-		return err
+		return fmt.Errorf("open migration failed: %w", err)
 	}
 
-	m.Up()
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return fmt.Errorf("run migration up failed: %w", err)
+	}
+
 	return nil
 }

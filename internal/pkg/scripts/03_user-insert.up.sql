@@ -19,4 +19,10 @@ VALUES
     'GROUND STAFF',
     NOW(),
     NOW()
-);
+)
+ON CONFLICT (email) DO UPDATE
+SET
+    name = EXCLUDED.name,
+    password_hash = EXCLUDED.password_hash,
+    role = EXCLUDED.role,
+    updated_at = NOW();

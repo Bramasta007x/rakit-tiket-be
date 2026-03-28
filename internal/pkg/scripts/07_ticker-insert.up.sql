@@ -18,7 +18,7 @@ INSERT INTO tickets (
 ) VALUES
 (
     gen_random_uuid(),
-    'c2acaa22-6b01-405b-8fe4-5098ed190fd7',
+    'a5f8ae5d-fe85-44ce-9752-7677d68a7311',
     'SILVER',
     'Silver Ticket',
     'AVAILABLE',
@@ -36,7 +36,7 @@ INSERT INTO tickets (
 ),
 (
     gen_random_uuid(),
-    'c2acaa22-6b01-405b-8fe4-5098ed190fd7',
+    'a5f8ae5d-fe85-44ce-9752-7677d68a7311',
     'GOLD',
     'Gold Ticket',
     'AVAILABLE',
@@ -54,7 +54,7 @@ INSERT INTO tickets (
 ),
 (
     gen_random_uuid(),
-    'c2acaa22-6b01-405b-8fe4-5098ed190fd7',
+    'a5f8ae5d-fe85-44ce-9752-7677d68a7311',
     'FESTIVAL',
     'Festival Pass',
     'AVAILABLE',
