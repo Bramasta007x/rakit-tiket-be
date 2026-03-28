@@ -25,6 +25,6 @@ func CorsOptions(clientOriginUrl string) cors.Options {
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization"},
 		MaxAge:           86400,
-		AllowCredentials: false,
+		AllowCredentials: true,
 	}
 }
