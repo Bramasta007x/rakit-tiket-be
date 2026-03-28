@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"rakit-tiket-be/internal/app/app_registrant/dao"
@@ -54,8 +55,8 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 	dbTrx := dao.NewTransactionRegistrant(ctx, s.log, s.sqlDB)
 	defer dbTrx.GetSqlTx().Rollback()
 
-	// Cari Order berdasarkan OrderNumber
-	tickets, err := dbTrx.GetTicketDAO().Search(ctx, ticketEntity.TicketQuery{IDs: ticketIDs})
+	// Cari Order berdasarkan OrderNumber (with row lock to prevent race condition)
+	tickets, err := dbTrx.GetTicketDAO().SearchForUpdate(ctx, ticketEntity.TicketQuery{IDs: ticketIDs})
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch tickets: %v", err)
 	}
@@ -133,8 +134,10 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 		prefix = "TKT"
 	}
 
-	uniqueCode := fmt.Sprintf("%s-%d-%05d", prefix, now.Year(), now.Unix()%100000)
-	orderNumber := fmt.Sprintf("%s%d-%05d", prefix, now.Year(), now.Unix()%100000)
+	// Gunakan UUID untuk memastikan unique code tidak bentrok di high concurrency
+	uniqueSuffix := strings.ReplaceAll(registrantID.String(), "-", "")[:12]
+	uniqueCode := fmt.Sprintf("%s-%d-%s", prefix, now.Year(), uniqueSuffix)
+	orderNumber := fmt.Sprintf("%s%d-%s", prefix, now.Year(), uniqueSuffix)
 
 	var regBirthdate *time.Time
 	if req.Registrant.Birthdate != nil && *req.Registrant.Birthdate != "" {

@@ -16,6 +16,7 @@ import (
 
 type OrderDAO interface {
 	Search(ctx context.Context, query entity.OrderQuery) (entity.Orders, error)
+	SearchForUpdate(ctx context.Context, query entity.OrderQuery) (entity.Orders, error)
 	Insert(ctx context.Context, orders entity.Orders) error
 	Update(ctx context.Context, orders entity.Orders) error
 	Delete(ctx context.Context, id pubEntity.UUID) error
@@ -140,6 +141,121 @@ func (d orderDAO) Search(ctx context.Context, query entity.OrderQuery) (entity.O
 			&order.DaoEntity.UpdatedAt,
 		); err != nil {
 			d.log.Error(ctx, "orderDAO.Search.Scan", zap.Error(err))
+			return nil, err
+		}
+
+		orders = append(orders, order)
+	}
+
+	return orders, nil
+}
+
+func (d orderDAO) SearchForUpdate(ctx context.Context, query entity.OrderQuery) (entity.Orders, error) {
+
+	sqlSelect := sqlgo.NewSQLGoSelect().
+		SetSQLSelect("o.id", "id").
+		SetSQLSelect("o.event_id", "event_id").
+		SetSQLSelect("o.registrant_id", "registrant_id").
+		SetSQLSelect("o.order_number", "order_number").
+		SetSQLSelect("o.amount", "amount").
+		SetSQLSelect("o.currency", "currency").
+		SetSQLSelect("o.payment_gateway", "payment_gateway").
+		SetSQLSelect("o.payment_method", "payment_method").
+		SetSQLSelect("o.payment_channel", "payment_channel").
+		SetSQLSelect("o.payment_status", "payment_status").
+		SetSQLSelect("o.payment_token", "payment_token").
+		SetSQLSelect("o.payment_url", "payment_url").
+		SetSQLSelect("o.payment_transaction_id", "payment_transaction_id").
+		SetSQLSelect("o.payment_metadata", "payment_metadata").
+		SetSQLSelect("o.payment_time", "payment_time").
+		SetSQLSelect("o.expires_at", "expires_at").
+		SetSQLSelect("o.deleted", "deleted").
+		SetSQLSelect("o.data_hash", "data_hash").
+		SetSQLSelect("o.created_at", "created_at").
+		SetSQLSelect("o.updated_at", "updated_at")
+
+	sqlFrom := sqlgo.NewSQLGoFrom().
+		SetSQLFrom("orders", "o")
+
+	sqlWhere := sqlgo.NewSQLGoWhere()
+	sqlWhere.SetSQLWhere("AND", "o.deleted", "=", false)
+
+	if len(query.IDs) > 0 {
+		sqlWhere.SetSQLWhere("AND", "o.id", "IN", query.IDs)
+	}
+
+	if len(query.RegistrantIDs) > 0 {
+		sqlWhere.SetSQLWhere("AND", "o.registrant_id", "IN", query.RegistrantIDs)
+	}
+
+	if len(query.EventIDs) > 0 {
+		sqlWhere.SetSQLWhere("AND", "o.event_id", "IN", query.EventIDs)
+	}
+
+	if len(query.OrderNumbers) > 0 {
+		sqlWhere.SetSQLWhere("AND", "o.order_number", "IN", query.OrderNumbers)
+	}
+
+	if len(query.Statuses) > 0 {
+		sqlWhere.SetSQLWhere("AND", "o.payment_status", "IN", query.Statuses)
+	}
+
+	if len(query.PaymentGateways) > 0 {
+		sqlWhere.SetSQLWhere("AND", "o.payment_gateway", "IN", query.PaymentGateways)
+	}
+
+	sql := sqlgo.NewSQLGo().
+		SetSQLSchema("public").
+		SetSQLGoSelect(sqlSelect).
+		SetSQLGoFrom(sqlFrom).
+		SetSQLGoWhere(sqlWhere)
+
+	sqlStr := sql.BuildSQL() + " FOR UPDATE"
+	sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
+
+	d.log.Debug(ctx, "orderDAO.SearchForUpdate",
+		zap.String("SQL", sqlStr),
+		zap.Any("Params", sqlParams),
+	)
+
+	rows, err := d.dbTrx.GetSqlTx().QueryContext(ctx, sqlStr, sqlParams...)
+	if err != nil {
+		d.log.Error(ctx, "orderDAO.SearchForUpdate",
+			zap.String("SQL", sqlStr),
+			zap.Any("Params", sqlParams),
+			zap.Error(err),
+		)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var orders entity.Orders
+	for rows.Next() {
+		var order entity.Order
+
+		if err := rows.Scan(
+			&order.ID,
+			&order.EventID,
+			&order.RegistrantID,
+			&order.OrderNumber,
+			&order.Amount,
+			&order.Currency,
+			&order.PaymentGateway,
+			&order.PaymentMethod,
+			&order.PaymentChannel,
+			&order.PaymentStatus,
+			&order.PaymentToken,
+			&order.PaymentURL,
+			&order.PaymentTransactionID,
+			&order.PaymentMetadata,
+			&order.PaymentTime,
+			&order.ExpiresAt,
+			&order.DaoEntity.Deleted,
+			&order.DaoEntity.DataHash,
+			&order.DaoEntity.CreatedAt,
+			&order.DaoEntity.UpdatedAt,
+		); err != nil {
+			d.log.Error(ctx, "orderDAO.SearchForUpdate.Scan", zap.Error(err))
 			return nil, err
 		}
 

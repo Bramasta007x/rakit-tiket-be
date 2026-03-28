@@ -15,6 +15,7 @@ import (
 
 type TicketDAO interface {
 	Search(ctx context.Context, query entity.TicketQuery) (entity.Tickets, error)
+	SearchForUpdate(ctx context.Context, query entity.TicketQuery) (entity.Tickets, error)
 	Insert(ctx context.Context, tickets entity.Tickets) error
 	Update(ctx context.Context, tickets entity.Tickets) error
 	Delete(ctx context.Context, id pubEntity.UUID) error
@@ -108,6 +109,85 @@ func (d ticketDAO) Search(ctx context.Context, query entity.TicketQuery) (entity
 			&ticket.CreatedAt, &ticket.UpdatedAt,
 		); err != nil {
 			d.log.Error(ctx, "ticketDAO.Search.Scan", zap.Error(err))
+			return nil, err
+		}
+		tickets = append(tickets, ticket)
+	}
+
+	return tickets, nil
+}
+
+func (d ticketDAO) SearchForUpdate(ctx context.Context, query entity.TicketQuery) (entity.Tickets, error) {
+	sqlSelect := sqlgo.NewSQLGoSelect().
+		SetSQLSelect("t.id", "id").
+		SetSQLSelect("t.event_id", "event_id").
+		SetSQLSelect("t.type", "type").
+		SetSQLSelect("t.title", "title").
+		SetSQLSelect("t.status", "status").
+		SetSQLSelect("t.description", "description").
+		SetSQLSelect("t.price", "price").
+		SetSQLSelect("t.total", "total").
+		SetSQLSelect("t.available_qty", "available_qty").
+		SetSQLSelect("t.booked_qty", "booked_qty").
+		SetSQLSelect("t.sold_qty", "sold_qty").
+		SetSQLSelect("t.is_presale", "is_presale").
+		SetSQLSelect("t.order_priority", "order_priority").
+		SetSQLSelect("t.created_at", "created_at").
+		SetSQLSelect("t.updated_at", "updated_at")
+
+	sqlFrom := sqlgo.NewSQLGoFrom().
+		SetSQLFrom("tickets", "t")
+
+	sqlWhere := sqlgo.NewSQLGoWhere()
+
+	if len(query.IDs) > 0 {
+		sqlWhere.SetSQLWhere("AND", "t.id", "IN", query.IDs)
+	}
+	if len(query.EventIDs) > 0 {
+		sqlWhere.SetSQLWhere("AND", "t.event_id", "IN", query.EventIDs)
+	}
+	if len(query.Types) > 0 {
+		sqlWhere.SetSQLWhere("AND", "t.type", "IN", query.Types)
+	}
+	if query.IsPresale != nil {
+		sqlWhere.SetSQLWhere("AND", "t.is_presale", "=", *query.IsPresale)
+	}
+	if query.Statuses != nil {
+		sqlWhere.SetSQLWhere("AND", "t.status", "=", query.Statuses)
+	}
+
+	sql := sqlgo.NewSQLGo().
+		SetSQLSchema("public").
+		SetSQLGoSelect(sqlSelect).
+		SetSQLGoFrom(sqlFrom).
+		SetSQLGoWhere(sqlWhere)
+
+	sqlStr := sql.BuildSQL() + " FOR UPDATE"
+	sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
+
+	d.log.Debug(ctx, "ticketDAO.SearchForUpdate",
+		zap.String("SQL", sqlStr),
+		zap.Any("Params", sqlParams),
+	)
+
+	rows, err := d.dbTrx.GetSqlTx().QueryContext(ctx, sqlStr, sqlParams...)
+	if err != nil {
+		d.log.Error(ctx, "ticketDAO.SearchForUpdate", zap.Error(err))
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tickets entity.Tickets
+	for rows.Next() {
+		var ticket entity.Ticket
+		if err := rows.Scan(
+			&ticket.ID, &ticket.EventID, &ticket.Type, &ticket.Title, &ticket.Status,
+			&ticket.Description, &ticket.Price, &ticket.Total,
+			&ticket.AvailableQty, &ticket.BookedQty, &ticket.SoldQty,
+			&ticket.IsPresale, &ticket.OrderPriority,
+			&ticket.CreatedAt, &ticket.UpdatedAt,
+		); err != nil {
+			d.log.Error(ctx, "ticketDAO.SearchForUpdate.Scan", zap.Error(err))
 			return nil, err
 		}
 		tickets = append(tickets, ticket)

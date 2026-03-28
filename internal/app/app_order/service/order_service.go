@@ -55,7 +55,7 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 	dbTrx := regDao.NewTransactionRegistrant(ctx, s.log, s.sqlDB)
 	defer dbTrx.GetSqlTx().Rollback()
 
-	orders, err := dbTrx.GetOrderDAO().Search(ctx, orderEntity.OrderQuery{
+	orders, err := dbTrx.GetOrderDAO().SearchForUpdate(ctx, orderEntity.OrderQuery{
 		OrderNumbers: []string{notif.OrderID},
 	})
 	if err != nil || len(orders) == 0 {

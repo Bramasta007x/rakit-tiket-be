@@ -33,6 +33,11 @@ func MakeLogUtil(level string, logFile *string, options ...zap.Option) LogUtil {
 		// Configure console encoder
 		consoleEncoder = zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
 	}
+	if strings.EqualFold(level, "error") {
+		// Error only mode - only show ERROR and above
+		logLevel = zap.NewAtomicLevelAt(zapcore.ErrorLevel)
+		consoleEncoder = zapcore.NewConsoleEncoder(zap.NewProductionEncoderConfig())
+	}
 	// Create console output sink
 	consoleOutput := zapcore.Lock(os.Stdout)
 	zapCores := []zapcore.Core{

@@ -24,7 +24,6 @@ import (
 	orderHandler "rakit-tiket-be/internal/app/app_order/handler"
 	orderService "rakit-tiket-be/internal/app/app_order/service"
 
-	// Tambahkan import modul event baru
 	eventHandler "rakit-tiket-be/internal/app/app_event/handler"
 	eventService "rakit-tiket-be/internal/app/app_event/service"
 
