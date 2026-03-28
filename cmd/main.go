@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 
 	authHandler "rakit-tiket-be/internal/app/app_auth/handler"
 	authService "rakit-tiket-be/internal/app/app_auth/service"
@@ -17,9 +18,21 @@ import (
 	ticketHandler "rakit-tiket-be/internal/app/app_ticket/handler"
 	ticketService "rakit-tiket-be/internal/app/app_ticket/service"
 
+	regHandler "rakit-tiket-be/internal/app/app_registrant/handler"
+	regService "rakit-tiket-be/internal/app/app_registrant/service"
+
+	orderHandler "rakit-tiket-be/internal/app/app_order/handler"
+	orderService "rakit-tiket-be/internal/app/app_order/service"
+
+	// Tambahkan import modul event baru
+	eventHandler "rakit-tiket-be/internal/app/app_event/handler"
+	eventService "rakit-tiket-be/internal/app/app_event/service"
+
 	"rakit-tiket-be/config"
 	"rakit-tiket-be/internal/pkg/client"
+	"rakit-tiket-be/internal/pkg/email"
 	"rakit-tiket-be/internal/pkg/middleware"
+	"rakit-tiket-be/internal/pkg/payment"
 	"rakit-tiket-be/pkg/constant"
 	"rakit-tiket-be/pkg/util"
 
@@ -35,7 +48,6 @@ func main() {
 		envgo.GetString(constant.LogEnvironment, constant.LogDevelopment),
 		nil,
 	)
-
 	// PostgreSQL
 	pgClient := client.MakePostgreSQLClientFromEnv()
 
@@ -52,25 +64,56 @@ func main() {
 	e := echo.New()
 
 	clientOrigin := envgo.GetString("CLIENT_ORIGIN_URL", "*")
-
 	corsOptions := config.CorsOptions(clientOrigin)
-
 	e.Use(echo.WrapMiddleware(cors.New(corsOptions).Handler))
 
 	// Middleware
 	authMiddleware := middleware.MakeAuthMiddleware(log)
 
-	// Services
+	smtpHost := envgo.GetString("SMTP_HOST", "")
+	smtpPort, err := strconv.Atoi(envgo.GetString("SMTP_PORT", ""))
+	if err != nil || smtpHost == "" || smtpPort == 0 {
+		log.Error(context.Background(), "Missing required SMTP configuration: SMTP_HOST and SMTP_PORT must be set")
+		os.Exit(1)
+	}
+	smtpUser := envgo.GetString("SMTP_USER", "")
+	smtpPass := envgo.GetString("SMTP_PASS", "")
+	senderName := envgo.GetString("SENDER_NAME", "")
+	senderEmail := envgo.GetString("SENDER_EMAIL", "")
+	if smtpUser == "" || smtpPass == "" || senderName == "" || senderEmail == "" {
+		log.Error(context.Background(), "Missing required SMTP configuration: SMTP_USER, SMTP_PASS, SENDER_NAME, and SENDER_EMAIL must be set")
+		os.Exit(1)
+	}
+
+	// Midtrans / Payment Factory
+	midtransServerKey := envgo.GetString("MIDTRANS_SERVER_KEY", "")
+	midtransEnvironment := envgo.GetString("MIDTRANS_ENVIRONMENT", "false")
+	if midtransServerKey == "" {
+		log.Error(context.Background(), "Missing required configuration: MIDTRANS_SERVER_KEY must be set")
+		os.Exit(1)
+	}
+	midtransIsProduction := midtransEnvironment == "true"
+	paymentFactory := payment.NewPaymentFactory(midtransServerKey, midtransIsProduction)
+	emailSvc := email.MakeEmailService(log, smtpHost, smtpPort, smtpUser, smtpPass, senderName, senderEmail)
+
+	// Service
 	landingPageService := landingPageService.MakeLandingPageService(sqlDB)
 	fileService := fileService.MakeFileService(log, sqlDB)
 	authSvc := authService.MakeAuthService(log, sqlDB)
-	ticketSvc := ticketService.MakeTicketService(sqlDB)
 
-	// Handlers / Adapters
+	ticketSvc := ticketService.MakeTicketService(log, sqlDB)
+	regService := regService.MakeRegistrantService(log, sqlDB, paymentFactory)
+	ordService := orderService.MakeOrderService(log, sqlDB, paymentFactory, emailSvc)
+	eventSvc := eventService.MakeEventService(log, sqlDB)
+
+	// Adapter
 	landingPageAdapter := landingPageHandler.MakeHttpAdapter(landingPageService, fileService, authMiddleware)
 	fileAdapter := fileHandler.MakeFileAdapter(log, fileService)
 	authAdapter := authHandler.MakeHttpAdapter(log, authSvc)
 	ticketAdapter := ticketHandler.MakeHttpAdapter(ticketSvc, authMiddleware)
+	registrantHttpHandler := regHandler.MakeHttpAdapter(regService)
+	orderHttpHandler := orderHandler.MakeHttpAdapter(log, ordService)
+	eventAdapter := eventHandler.MakeHttpAdapter(eventSvc, authMiddleware)
 
 	// Register Routes
 	apiGroup := e.Group("/api")
@@ -79,6 +122,9 @@ func main() {
 	fileAdapter.RegisterRouter(apiGroup)
 	authAdapter.RegisterRoute(apiGroup)
 	ticketAdapter.RegisterRoute(apiGroup)
+	registrantHttpHandler.RegisterRoute(apiGroup)
+	orderHttpHandler.RegisterRoute(apiGroup)
+	eventAdapter.RegisterRoute(apiGroup)
 
 	// Start Server
 	port := envgo.GetString("PORT", "8000")
