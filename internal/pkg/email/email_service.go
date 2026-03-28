@@ -2,6 +2,7 @@ package email
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"rakit-tiket-be/pkg/util"
@@ -11,7 +12,7 @@ import (
 )
 
 type EmailService interface {
-	SendTicketEmail(ctx context.Context, toEmail, orderNumber, eventName string, attachments []Attachment) error
+	SendTicketEmail(ctx context.Context, toEmail, orderNumber, eventName, ownerName string, attachments []Attachment) error
 }
 
 type Attachment struct {
@@ -41,38 +42,47 @@ func MakeEmailService(log util.LogUtil, host string, port int, user, password, s
 	}
 }
 
-func (s emailService) SendTicketEmail(ctx context.Context, toEmail, orderNumber, eventName string, attachments []Attachment) error {
+func (s emailService) SendTicketEmail(ctx context.Context, toEmail, orderNumber, eventName, ownerName string, attachments []Attachment) error {
 	m := gomail.NewMessage()
 
-	// Set Header
 	m.SetHeader("From", m.FormatAddress(s.senderEmail, s.senderName))
 	m.SetHeader("To", toEmail)
 	m.SetHeader("Subject", "E-Ticket Anda - Pembayaran Berhasil ["+orderNumber+"]")
 
-	// Set Body Email
-	body := "Halo,\n\n" +
-		"Terima kasih telah melakukan pembelian tiket untuk event **" + eventName + "**.\n\n" +
-		"Pembayaran Anda dengan nomor pesanan " + orderNumber + " telah berhasil kami terima.\n\n" +
-		"Terlampir E-Ticket Anda pada email ini. Silakan unduh dan tunjukkan QR Code pada tiket saat memasuki area acara.\n\n" +
-		"Salam Hangat,\nTim " + s.senderName
+	// Email HTML
+	htmlBody := fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html>
+	<body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; padding: 20px;">
+		<div style="max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 10px; padding: 20px; background-color: #f9f9f9;">
+			<h2 style="color: #b20000; text-align: center;">Pembayaran Berhasil! 🎉</h2>
+			<p>Halo <b>%s</b>,</p>
+			<p>Terima kasih telah melakukan pembelian tiket untuk event <strong>%s</strong>.</p>
+			<p>Pembayaran Anda dengan nomor pesanan <b style="color:#1e40af;">%s</b> telah berhasil kami terima.</p>
+			<div style="background-color: #fff; padding: 15px; border-left: 4px solid #b20000; margin: 20px 0;">
+				<p style="margin: 0;">Terlampir E-Ticket (PDF) Anda pada email ini. Silakan unduh dan tunjukkan <b>QR Code</b> pada tiket saat memasuki area acara untuk di-scan oleh petugas.</p>
+			</div>
+			<br>
+			<p>Salam Hangat,<br><b>Tim %s</b></p>
+		</div>
+	</body>
+	</html>
+	`, ownerName, eventName, orderNumber, s.senderName)
 
-	m.SetBody("text/plain", body)
+	m.SetBody("text/html", htmlBody) // Set sebagai text/html
 
-	// Attach File (Membaca langsung dari memory RAM tanpa membuat file fisik)
+	// Attach File PDF
 	for _, att := range attachments {
-		// Menghindari pointer issue di dalam loop
 		fileData := att.Data
-
 		m.Attach(att.FileName, gomail.SetCopyFunc(func(w io.Writer) error {
 			_, err := w.Write(fileData)
 			return err
 		}))
 	}
 
-	// Proses Dial & Send
 	d := gomail.NewDialer(s.host, s.port, s.user, s.password)
 
-	s.log.Info(ctx, "Mencoba mengirim email tiket...", zap.String("to", toEmail))
+	s.log.Info(ctx, "Mencoba mengirim email HTML PDF tiket...", zap.String("to", toEmail))
 	if err := d.DialAndSend(m); err != nil {
 		s.log.Error(ctx, "Gagal mengirim email", zap.Error(err))
 		return err

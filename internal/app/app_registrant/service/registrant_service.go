@@ -64,6 +64,10 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 	ticketMap := make(map[string]ticketEntity.Ticket)
 	var eventID pubEntity.UUID
 
+	if len(tickets) == 0 {
+		return nil, errors.New("tiket tidak ditemukan")
+	}
+
 	for i, t := range tickets {
 		ticketMap[string(t.ID)] = t
 		if i == 0 {
@@ -73,9 +77,16 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 		}
 	}
 
+	if eventID == "" {
+		return nil, errors.New("event_id pada tiket tidak valid")
+	}
+
 	// Ambil Konfigurasi Event
 	events, err := dbTrx.GetEventDAO().Search(ctx, eventEntity.EventQuery{IDs: []string{string(eventID)}})
-	if err != nil || len(events) == 0 {
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch event: %v", err)
+	}
+	if len(events) == 0 {
 		return nil, errors.New("event tidak ditemukan")
 	}
 	eventData := events[0]
@@ -95,13 +106,13 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 			return nil, fmt.Errorf("tiket %s tidak ditemukan", tID)
 		}
 
-		// A. Eksekusi Atomic Booking!
+		// Eksekusi Atomic Booking!
 		err := dbTrx.GetTicketDAO().BookStock(ctx, pubEntity.UUID(tID), qty)
 		if err != nil {
 			return nil, fmt.Errorf("stok tiket %s tidak mencukupi (habis)", ticketData.Title)
 		}
 
-		// B. Hitung Harga
+		// Hitung Harga
 		totalCost += ticketData.Price * float64(qty)
 		paymentItems = append(paymentItems, payment.Item{
 			ID:       string(ticketData.ID),
@@ -116,7 +127,7 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 	registrantID := pubEntity.MakeUUID(req.Registrant.Email, now.String())
 	orderID := pubEntity.MakeUUID("ORDER", req.Registrant.Email, now.String())
 
-	// Default fallback misal prefix kosong, namun di database sudah 'NOT NULL'
+	// Default fallback misal prefix kosong
 	prefix := eventData.TicketPrefixCode
 	if prefix == "" {
 		prefix = "TKT"

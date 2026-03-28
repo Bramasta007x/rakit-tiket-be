@@ -140,34 +140,45 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 			}
 		}
 
-		eventName := "Rakit Tiket Event"
+		dynamicEvent := EventDynamicData{
+			EventName:      "Rakit Tiket Event", // Fallback Default
+			EventDate:      "Belum Ditentukan",
+			EventTimeStart: "-",
+			EventTimeEnd:   "-",
+			EventLocation:  "Venue Terpilih",
+		}
 
-		attachments, err := GenerateTickets(orderData, registrantData, attendees, ticketMap, eventName)
+		// Cari Nama Event Asli NEED CEK
+		_ = s.sqlDB.QueryRowContext(ctx, "SELECT name FROM events WHERE id = $1", orderData.EventID).Scan(&dynamicEvent.EventName)
+
+		// Cari Waktu & Lokasi di tabel landing_pages
+		_ = s.sqlDB.QueryRowContext(ctx, "SELECT event_date, event_time_start, event_time_end, event_location FROM landing_pages WHERE event_id = $1", orderData.EventID).
+			Scan(&dynamicEvent.EventDate, &dynamicEvent.EventTimeStart, &dynamicEvent.EventTimeEnd, &dynamicEvent.EventLocation)
+
+		attachments, err := GenerateTicketsPDF(orderData, registrantData, attendees, ticketMap, dynamicEvent)
 		if err != nil {
-			s.log.Error(ctx, "Failed to generate tickets", zap.Error(err))
+			s.log.Error(ctx, "Failed to generate PDF tickets", zap.Error(err))
 		} else {
-			s.log.Info(ctx, "Successfully generated tickets", zap.Int("total", len(attachments)))
+			s.log.Info(ctx, "Successfully generated PDF tickets", zap.Int("total", len(attachments)))
 
-			// Mapping struct Attachment dari order module ke email module
 			var emailAtts []email.Attachment
 			for _, att := range attachments {
 				emailAtts = append(emailAtts, email.Attachment{
 					FileName: att.FileName,
-					Data:     att.HTMLData,
+					Data:     att.Data,
 				})
 			}
 
-			// Goroutine agar proses kirim email berjalan di background dan Midtrans cepat mendapat balasan 200 OK
-			go func(targetEmail string, ordNum string, evtName string, atts []email.Attachment) {
-				// Menggunakan context background baru karena request aslinya mungkin sudah terputus
+			go func(targetEmail, ordNum, evtName, ownerName string, atts []email.Attachment) {
 				bgCtx := context.Background()
-				err := s.emailService.SendTicketEmail(bgCtx, targetEmail, ordNum, evtName, atts)
+
+				err := s.emailService.SendTicketEmail(bgCtx, targetEmail, ordNum, evtName, ownerName, atts)
 				if err != nil {
-					s.log.Error(bgCtx, "Gagal mengirim email asinkronus", zap.Error(err))
+					s.log.Error(bgCtx, "Gagal mengirim email PDF asinkronus", zap.Error(err))
 				} else {
-					s.log.Info(bgCtx, "Email E-Ticket berhasil terkirim!", zap.String("to", targetEmail))
+					s.log.Info(bgCtx, "Email PDF E-Ticket berhasil terkirim!", zap.String("to", targetEmail))
 				}
-			}(registrantData.Email, orderData.OrderNumber, eventName, emailAtts)
+			}(registrantData.Email, orderData.OrderNumber, dynamicEvent.EventName, registrantData.Name, emailAtts)
 		}
 
 	} else if notif.PaymentStatus == "failed" || notif.PaymentStatus == "expired" {

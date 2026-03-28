@@ -56,13 +56,11 @@ func (h orderHandler) handleWebhook(c echo.Context) error {
 	defer c.Request().Body.Close()
 
 	if err := h.orderService.HandleWebhook(ctx, gateway, body); err != nil {
-		h.log.Error(ctx, "Webhook processing error", zap.Error(err), zap.String("gateway", gatewayParam))
-
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		h.log.Warn(ctx, "Webhook processed with warning", zap.Error(err), zap.String("gateway", gatewayParam))
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{
-		"message": "Webhook processed successfully",
+		"message": "Webhook received",
 	})
 }
 
