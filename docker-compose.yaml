@@ -33,7 +33,6 @@ services:
     volumes:
       - ./upload:/app/upload
     environment:
-      PORT: ${PORT}
       CLIENT_ORIGIN_URL: ${CLIENT_ORIGIN_URL}
       DB_HOST: db
       DB_PORT: 5432
