@@ -35,7 +35,6 @@ func (d landingPageDAO) Search(ctx context.Context, query entity.LandingPageQuer
 	sqlSelect := sqlgo.NewSQLGoSelect().
 		SetSQLSelect("lp.id", "id").
 		SetSQLSelect("lp.event_id", "event_id").
-		// Event Info
 		SetSQLSelect("lp.event_name", "event_name").
 		SetSQLSelect("lp.event_subtitle", "event_subtitle").
 		SetSQLSelect("lp.event_creator", "event_creator").
@@ -44,30 +43,35 @@ func (d landingPageDAO) Search(ctx context.Context, query entity.LandingPageQuer
 		SetSQLSelect("lp.event_time_end", "event_time_end").
 		SetSQLSelect("lp.event_location", "event_location").
 		SetSQLSelect("lp.logo_image", "logo_image").
-		// Hero Section
 		SetSQLSelect("lp.hero_id", "hero_id").
 		SetSQLSelect("lp.banner_image", "banner_image").
 		SetSQLSelect("lp.banner_color", "banner_color").
 		SetSQLSelect("lp.hero_button_id", "hero_button_id").
 		SetSQLSelect("lp.hero_button_text", "hero_button_text").
 		SetSQLSelect("lp.hero_button_link", "hero_button_link").
-		// Countdown
 		SetSQLSelect("lp.hero_countdown_id", "hero_countdown_id").
 		SetSQLSelect("lp.hero_countdown_date", "hero_countdown_date").
 		SetSQLSelect("lp.hero_countdown_time_start", "hero_countdown_time_start").
 		SetSQLSelect("lp.hero_countdown_time_end", "hero_countdown_time_end").
 		SetSQLSelect("lp.hero_countdown_after_text", "hero_countdown_after_text").
-		// Venue Section
 		SetSQLSelect("lp.venue_id", "venue_id").
 		SetSQLSelect("lp.venue_image", "venue_image").
 		SetSQLSelect("lp.venue_layout", "venue_layout").
 		SetSQLSelect("lp.venue_address", "venue_address").
 		SetSQLSelect("lp.venue_map_link", "venue_map_link").
 		SetSQLSelect("lp.venue_google", "venue_google").
-		// JSON Data
-		SetSQLSelect("lp.terms_and_conditions", "terms_and_conditions").
+		SetSQLSelect("lp.ticket_id", "ticket_id").
+		SetSQLSelect("lp.ticket_title", "ticket_title").
+		SetSQLSelect("lp.ticket_description", "ticket_description").
+		SetSQLSelect("lp.tickets", "tickets").
+		SetSQLSelect("lp.artist_id", "artist_id").
+		SetSQLSelect("lp.artist_title", "artist_title").
+		SetSQLSelect("lp.artist_subtitle", "artist_subtitle").
+		SetSQLSelect("lp.artists", "artists").
+		SetSQLSelect("lp.faq_id", "faq_id").
 		SetSQLSelect("lp.faqs", "faqs").
-		// Metadata
+		SetSQLSelect("lp.terms_and_conditions_id", "terms_and_conditions_id").
+		SetSQLSelect("lp.terms_and_conditions", "terms_and_conditions").
 		SetSQLSelect("lp.deleted", "deleted").
 		SetSQLSelect("lp.data_hash", "data_hash").
 		SetSQLSelect("lp.created_at", "created_at").
@@ -109,13 +113,11 @@ func (d landingPageDAO) Search(ctx context.Context, query entity.LandingPageQuer
 	var pages entity.LandingPages
 	for rows.Next() {
 		var page entity.LandingPage
-		var termsJSON []byte
-		var faqsJSON []byte
+		var termsJSON, faqsJSON, ticketsJSON, artistsJSON []byte
 
 		if err := rows.Scan(
 			&page.ID,
 			&page.EventID,
-			// Event Info
 			&page.EventName,
 			&page.EventSubtitle,
 			&page.EventCreator,
@@ -124,30 +126,35 @@ func (d landingPageDAO) Search(ctx context.Context, query entity.LandingPageQuer
 			&page.EventTimeEnd,
 			&page.EventLocation,
 			&page.LogoImage,
-			// Hero Section
 			&page.HeroID,
 			&page.BannerImage,
 			&page.BannerColor,
 			&page.HeroButtonID,
 			&page.HeroButtonText,
 			&page.HeroButtonLink,
-			// Countdown
 			&page.HeroCountdownID,
 			&page.HeroCountdownDate,
 			&page.HeroCountdownTimeStart,
 			&page.HeroCountdownTimeEnd,
 			&page.HeroCountdownAfterText,
-			// Venue Section
 			&page.VenueID,
 			&page.VenueImage,
 			&page.VenueLayout,
 			&page.VenueAddress,
 			&page.VenueMapLink,
 			&page.VenueGoogle,
-			// JSON Data
-			&termsJSON,
+			&page.TicketID,
+			&page.TicketTitle,
+			&page.TicketDescription,
+			&ticketsJSON,
+			&page.ArtistID,
+			&page.ArtistTitle,
+			&page.ArtistSubtitle,
+			&artistsJSON,
+			&page.FAQID,
 			&faqsJSON,
-			// Metadata
+			&page.TermsAndConditionsID,
+			&termsJSON,
 			&page.DaoEntity.Deleted,
 			&page.DaoEntity.DataHash,
 			&page.DaoEntity.CreatedAt,
@@ -156,18 +163,32 @@ func (d landingPageDAO) Search(ctx context.Context, query entity.LandingPageQuer
 			return nil, err
 		}
 
-		// Unmarshal Terms
 		if len(termsJSON) > 0 {
 			if err := json.Unmarshal(termsJSON, &page.TermsAndConditions); err != nil {
 				page.TermsAndConditions = []string{}
 			}
 		}
 
-		// Unmarshal FAQs
 		if len(faqsJSON) > 0 {
 			if err := json.Unmarshal(faqsJSON, &page.Faqs); err != nil {
 				page.Faqs = []string{}
 			}
+		}
+
+		if len(ticketsJSON) > 0 {
+			if err := json.Unmarshal(ticketsJSON, &page.Tickets); err != nil {
+				page.Tickets = []entity.TicketInfo{}
+			}
+		} else {
+			page.Tickets = []entity.TicketInfo{}
+		}
+
+		if len(artistsJSON) > 0 {
+			if err := json.Unmarshal(artistsJSON, &page.Artists); err != nil {
+				page.Artists = []entity.ArtistInfo{}
+			}
+		} else {
+			page.Artists = []entity.ArtistInfo{}
 		}
 
 		pages = append(pages, page)
@@ -187,7 +208,6 @@ func (d landingPageDAO) Insert(ctx context.Context, pages entity.LandingPages) e
 		SetSQLInsertColumn(
 			"id",
 			"event_id",
-			// Event
 			"event_name",
 			"event_subtitle",
 			"event_creator",
@@ -196,30 +216,35 @@ func (d landingPageDAO) Insert(ctx context.Context, pages entity.LandingPages) e
 			"event_time_end",
 			"event_location",
 			"logo_image",
-			// Hero
 			"hero_id",
 			"banner_image",
 			"banner_color",
 			"hero_button_id",
 			"hero_button_text",
 			"hero_button_link",
-			// Countdown
 			"hero_countdown_id",
 			"hero_countdown_date",
 			"hero_countdown_time_start",
 			"hero_countdown_time_end",
 			"hero_countdown_after_text",
-			// Venue
 			"venue_id",
 			"venue_image",
 			"venue_layout",
 			"venue_address",
 			"venue_map_link",
 			"venue_google",
-			// JSON
-			"terms_and_conditions",
+			"ticket_id",
+			"ticket_title",
+			"ticket_description",
+			"tickets",
+			"artist_id",
+			"artist_title",
+			"artist_subtitle",
+			"artists",
+			"faq_id",
 			"faqs",
-			// Metadata
+			"terms_and_conditions_id",
+			"terms_and_conditions",
 			"data_hash",
 			"created_at",
 		)
@@ -231,22 +256,14 @@ func (d landingPageDAO) Insert(ctx context.Context, pages entity.LandingPages) e
 			page.CreatedAt.String(),
 		)
 
-		// Marshal Terms
-		termsJSON, err := json.Marshal(page.TermsAndConditions)
-		if err != nil {
-			termsJSON = []byte("[]")
-		}
-
-		// Marshal FAQs
-		faqsJSON, err := json.Marshal(page.Faqs)
-		if err != nil {
-			faqsJSON = []byte("[]")
-		}
+		termsJSON, _ := json.Marshal(page.TermsAndConditions)
+		faqsJSON, _ := json.Marshal(page.Faqs)
+		ticketsJSON, _ := json.Marshal(page.Tickets)
+		artistsJSON, _ := json.Marshal(page.Artists)
 
 		sqlInsert.SetSQLInsertValue(
 			page.ID,
 			page.EventID,
-			// Event
 			page.EventName,
 			page.EventSubtitle,
 			page.EventCreator,
@@ -255,30 +272,35 @@ func (d landingPageDAO) Insert(ctx context.Context, pages entity.LandingPages) e
 			page.EventTimeEnd,
 			page.EventLocation,
 			page.LogoImage,
-			// Hero
 			page.HeroID,
 			page.BannerImage,
 			page.BannerColor,
 			page.HeroButtonID,
 			page.HeroButtonText,
 			page.HeroButtonLink,
-			// Countdown
 			page.HeroCountdownID,
 			page.HeroCountdownDate,
 			page.HeroCountdownTimeStart,
 			page.HeroCountdownTimeEnd,
 			page.HeroCountdownAfterText,
-			// Venue
 			page.VenueID,
 			page.VenueImage,
 			page.VenueLayout,
 			page.VenueAddress,
 			page.VenueMapLink,
 			page.VenueGoogle,
-			// JSON
-			termsJSON,
+			page.TicketID,
+			page.TicketTitle,
+			page.TicketDescription,
+			ticketsJSON,
+			page.ArtistID,
+			page.ArtistTitle,
+			page.ArtistSubtitle,
+			artistsJSON,
+			page.FAQID,
 			faqsJSON,
-			// Metadata
+			page.TermsAndConditionsID,
+			termsJSON,
 			page.DataHash,
 			page.CreatedAt,
 		)
@@ -309,20 +331,14 @@ func (d landingPageDAO) Update(ctx context.Context, pages entity.LandingPages) e
 		now := time.Now()
 		page.UpdatedAt = &now
 
-		termsJSON, err := json.Marshal(page.TermsAndConditions)
-		if err != nil {
-			termsJSON = []byte("[]")
-		}
-
-		faqsJSON, err := json.Marshal(page.Faqs)
-		if err != nil {
-			faqsJSON = []byte("[]")
-		}
+		termsJSON, _ := json.Marshal(page.TermsAndConditions)
+		faqsJSON, _ := json.Marshal(page.Faqs)
+		ticketsJSON, _ := json.Marshal(page.Tickets)
+		artistsJSON, _ := json.Marshal(page.Artists)
 
 		sql := sqlgo.NewSQLGo().
 			SetSQLSchema("public").
 			SetSQLUpdate("landing_page_configs").
-			// Event
 			SetSQLUpdateValue("event_id", page.EventID).
 			SetSQLUpdateValue("event_name", page.EventName).
 			SetSQLUpdateValue("event_subtitle", page.EventSubtitle).
@@ -332,35 +348,40 @@ func (d landingPageDAO) Update(ctx context.Context, pages entity.LandingPages) e
 			SetSQLUpdateValue("event_time_end", page.EventTimeEnd).
 			SetSQLUpdateValue("event_location", page.EventLocation).
 			SetSQLUpdateValue("logo_image", page.LogoImage).
-			// Hero
 			SetSQLUpdateValue("hero_id", page.HeroID).
 			SetSQLUpdateValue("banner_image", page.BannerImage).
 			SetSQLUpdateValue("banner_color", page.BannerColor).
 			SetSQLUpdateValue("hero_button_id", page.HeroButtonID).
 			SetSQLUpdateValue("hero_button_text", page.HeroButtonText).
 			SetSQLUpdateValue("hero_button_link", page.HeroButtonLink).
-			// Countdown
 			SetSQLUpdateValue("hero_countdown_id", page.HeroCountdownID).
 			SetSQLUpdateValue("hero_countdown_date", page.HeroCountdownDate).
 			SetSQLUpdateValue("hero_countdown_time_start", page.HeroCountdownTimeStart).
 			SetSQLUpdateValue("hero_countdown_time_end", page.HeroCountdownTimeEnd).
 			SetSQLUpdateValue("hero_countdown_after_text", page.HeroCountdownAfterText).
-			// Venue
 			SetSQLUpdateValue("venue_id", page.VenueID).
 			SetSQLUpdateValue("venue_image", page.VenueImage).
 			SetSQLUpdateValue("venue_layout", page.VenueLayout).
 			SetSQLUpdateValue("venue_address", page.VenueAddress).
 			SetSQLUpdateValue("venue_map_link", page.VenueMapLink).
 			SetSQLUpdateValue("venue_google", page.VenueGoogle).
-			// JSON
-			SetSQLUpdateValue("terms_and_conditions", termsJSON).
+			SetSQLUpdateValue("ticket_id", page.TicketID).
+			SetSQLUpdateValue("ticket_title", page.TicketTitle).
+			SetSQLUpdateValue("ticket_description", page.TicketDescription).
+			SetSQLUpdateValue("tickets", ticketsJSON).
+			SetSQLUpdateValue("artist_id", page.ArtistID).
+			SetSQLUpdateValue("artist_title", page.ArtistTitle).
+			SetSQLUpdateValue("artist_subtitle", page.ArtistSubtitle).
+			SetSQLUpdateValue("artists", artistsJSON).
+			SetSQLUpdateValue("faq_id", page.FAQID).
 			SetSQLUpdateValue("faqs", faqsJSON).
-			// Metadata
+			SetSQLUpdateValue("terms_and_conditions_id", page.TermsAndConditionsID).
+			SetSQLUpdateValue("terms_and_conditions", termsJSON).
 			SetSQLUpdateValue("data_hash", page.DataHash).
 			SetSQLUpdateValue("updated_at", page.UpdatedAt).
 			SetSQLWhere("AND", "id", "=", page.ID)
 
-		_, err = d.dbTrx.GetSqlTx().ExecContext(
+		_, err := d.dbTrx.GetSqlTx().ExecContext(
 			ctx,
 			sql.BuildSQL(),
 			sql.GetSQLGoParameter().GetSQLParameter()...,

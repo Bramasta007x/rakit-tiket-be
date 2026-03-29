@@ -41,12 +41,27 @@ CREATE TABLE landing_page_configs (
     venue_layout varchar NULL,         
     venue_address varchar NULL,        
     venue_map_link varchar NULL, 
-    venue_google varchar NULL,      
-     
+    venue_google varchar NULL,   
 
-    -- JSON Data
-    terms_and_conditions jsonb NOT NULL DEFAULT '[]'::jsonb,
+    -- Ticket Section
+    ticket_id varchar NULL,
+    ticket_title varchar NULL,
+    ticket_description varchar NULL,
+    tickets jsonb NOT NULL DEFAULT '[]'::jsonb,
+
+    -- Artist Section
+    artist_id varchar NULL,
+    artist_title varchar NULL,
+    artist_subtitle varchar NULL,
+    artists jsonb NOT NULL DEFAULT '[]'::jsonb,
+
+    -- FAQ Section
+    faq_id varchar NULL,
     faqs jsonb NOT NULL DEFAULT '[]'::jsonb, 
+
+    -- Terms Section
+    terms_and_conditions_id varchar NULL,
+    terms_and_conditions jsonb NOT NULL DEFAULT '[]'::jsonb,
 
     -- Metadata
     deleted bool NOT NULL DEFAULT false,

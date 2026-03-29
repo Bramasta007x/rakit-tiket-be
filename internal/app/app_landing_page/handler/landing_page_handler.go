@@ -86,12 +86,10 @@ func (h landingPageHandler) insertLandingPages(c echo.Context) error {
 func (h landingPageHandler) upsertLandingPageWrapper(c echo.Context) error {
 	contentType := c.Request().Header.Get("Content-Type")
 
-	// Jika request adalah Multipart (Upload File)
 	if strings.Contains(contentType, "multipart/form-data") {
 		return h.handleMultipartLandingPage(c)
 	}
 
-	// Fallback ke JSON biasa
 	if c.Request().Method == http.MethodPost {
 		return h.insertLandingPage(c)
 	}
@@ -102,7 +100,6 @@ func (h landingPageHandler) upsertLandingPageWrapper(c echo.Context) error {
 func (h landingPageHandler) handleMultipartLandingPage(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	// Ambil JSON String dari key "data"
 	jsonData := c.FormValue("data")
 
 	var landingPage entity.LandingPage
@@ -111,29 +108,23 @@ func (h landingPageHandler) handleMultipartLandingPage(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid JSON format in 'data' field: "+err.Error())
 	}
 
-	// Generate ID di awal jika create baru, agar bisa direlasikan dengan File
 	if landingPage.ID == "" {
-		// Jika ada param ID di URL (PUT), pakai itu
 		if ParamID := c.Param("id"); ParamID != "" {
-			// Jika ada param ID di URL (PUT), pakai itu
 			landingPage.ID = pubEntity.UUID(ParamID)
 		} else {
-			// Jika POST baru
 			landingPage.ID = pubEntity.UUID(pubEntity.MakeUUID())
 		}
 	}
 
-	// Helper function untuk proses upload
 	processUpload := func(formKey string, relationSource string) (*string, error) {
 		fileHeader, err := c.FormFile(formKey)
 		if err != nil {
 			if err == http.ErrMissingFile {
-				return nil, nil // Tidak ada file diupload, skip
+				return nil, nil
 			}
 			return nil, err
 		}
 
-		// Buka file
 		src, err := fileHeader.Open()
 		if err != nil {
 			return nil, err
@@ -145,61 +136,86 @@ func (h landingPageHandler) handleMultipartLandingPage(c echo.Context) error {
 			return nil, err
 		}
 
-		// Buat entity File
 		fileEntity := &fileEntity.FileEntity{
 			Name:        fileHeader.Filename,
 			Description: fmt.Sprintf("Uploaded for Landing Page %s", relationSource),
 			Data:        fileBytes,
 			RelationEntity: pubEntity.MakeRelationEntity(
-				landingPage.ID, // Merelasikan ke Landing Page ID
-				relationSource, // Contoh: "landing_page_banner"
+				landingPage.ID,
+				relationSource,
 			),
 		}
 
-		// Simpan via FileService (Ini akan menyimpan ke disk & DB File)
 		if err := h.fileService.Insert(ctx, fileEntity); err != nil {
 			return nil, err
 		}
 
 		filePathFolder := h.fileService.GetFilePath()
-
-		// Return ID file yang baru dibuat
 		filePath := fmt.Sprintf("%s/%s/%s/%s.ref", filePathFolder, fileEntity.RelationSource, fileEntity.RelationID.String(), fileEntity.ID.String())
 
 		return &filePath, nil
 	}
 
-	// Proses Upload Banner Image (Jika ada)
-	bannerFileID, err := processUpload("banner_image_file", "landing_page_banner")
+	// Upload banner_image
+	bannerFileID, err := processUpload("banner_image", "landing_page_banner")
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed uploading banner: "+err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed uploading banner_image: "+err.Error())
 	}
-
 	if bannerFileID != nil {
-		landingPage.BannerImage = bannerFileID // Update struct dengan ID file baru
+		landingPage.BannerImage = bannerFileID
 	}
 
-	// Proses Upload Venue Image (jika ada)
-	venueFileID, err := processUpload("venue_image_file", "landing_page_venue")
+	// Upload logo_image
+	logoFileID, err := processUpload("logo_image", "landing_page_logo")
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed uploading venue: "+err.Error())
-	}
-
-	if venueFileID != nil {
-		landingPage.VenueImage = venueFileID // Update struct dengan ID file baru
-	}
-
-	// Proses Upload Logo Image (jika ada)
-	logoFileID, err := processUpload("logo_image_file", "landing_page_logo")
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed uploading logo: "+err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed uploading logo_image: "+err.Error())
 	}
 	if logoFileID != nil {
-		landingPage.LogoImage = logoFileID // Update struct dengan ID file baru
+		landingPage.LogoImage = logoFileID
 	}
 
-	// Simpan Data Landing Page ke DB
-	// Menggunakan Upsert, Insert jika tidak ada data, Update jika ada data
+	// Upload venue_image
+	venueImageFileID, err := processUpload("venue_image", "landing_page_venue")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed uploading venue_image: "+err.Error())
+	}
+	if venueImageFileID != nil {
+		landingPage.VenueImage = venueImageFileID
+	}
+
+	// Upload venue_layout
+	venueLayoutFileID, err := processUpload("venue_layout", "landing_page_venue_layout")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed uploading venue_layout: "+err.Error())
+	}
+	if venueLayoutFileID != nil {
+		landingPage.VenueLayout = venueLayoutFileID
+	}
+
+	// Upload artist images (multiple with index suffix: artist_image_0, artist_image_1, etc.)
+	for i := range landingPage.Artists {
+		formKey := fmt.Sprintf("artist_image_%d", i)
+		artistImageFileID, err := processUpload(formKey, "artist_image")
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("Failed uploading artist_image_%d: %v", i, err.Error()))
+		}
+		if artistImageFileID != nil {
+			landingPage.Artists[i].Image = artistImageFileID
+			landingPage.Artists[i].ImageUrl = artistImageFileID
+		}
+	}
+
+	// Also check for generic artist_image (single upload without index)
+	artistImageFileID, err := processUpload("artist_image", "artist_image")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed uploading artist_image: "+err.Error())
+	}
+	if artistImageFileID != nil && len(landingPage.Artists) > 0 {
+		// Apply to first artist if no indexed image was uploaded
+		landingPage.Artists[0].Image = artistImageFileID
+		landingPage.Artists[0].ImageUrl = artistImageFileID
+	}
+
 	var serviceError error
 	if c.Request().Method == http.MethodPost {
 		serviceError = h.landingPageService.Insert(ctx, entity.LandingPages{landingPage})

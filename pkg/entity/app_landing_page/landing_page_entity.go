@@ -4,6 +4,17 @@ import (
 	pubEntity "rakit-tiket-be/pkg/entity"
 )
 
+type TicketInfo struct {
+	ID            string  `json:"id"`
+	Title         string  `json:"title"`
+	Description   *string `json:"description"`
+	Price         float64 `json:"price"`
+	Total         int     `json:"total"`
+	Remaining     int     `json:"remaining"`
+	IsPresale     bool    `json:"is_presale"`
+	OrderPriority int     `json:"order_priority"`
+}
+
 type (
 	LandingPageQuery struct {
 		IDs       []string `query:"id"`
@@ -48,11 +59,40 @@ type (
 		VenueMapLink *string `json:"venue_map_link"`
 		VenueGoogle  *string `json:"venue_google"`
 
-		TermsAndConditions []string `json:"terms_and_conditions"`
-		Faqs               []string `json:"faqs"`
+		// Ticket Section
+		TicketID          *string      `json:"ticket_id"`
+		TicketTitle       *string      `json:"ticket_title"`
+		TicketDescription *string      `json:"ticket_description"`
+		Tickets           []TicketInfo `json:"tickets"`
+
+		// Artist Section
+		ArtistID       *string      `json:"artist_id"`
+		ArtistTitle    *string      `json:"artist_title"`
+		ArtistSubtitle *string      `json:"artist_subtitle"`
+		Artists        []ArtistInfo `json:"artist"`
+
+		// FAQ & Terms
+		FAQID                *string  `json:"faq_id"`
+		Faqs                 []string `json:"faqs"`
+		TermsAndConditionsID *string  `json:"terms_and_conditions_id"`
+		TermsAndConditions   []string `json:"terms_and_conditions"`
 
 		pubEntity.DaoEntity
 	}
 
 	LandingPages []LandingPage
+
+	ArtistInfo struct {
+		ID                pubEntity.UUID      `json:"id"`
+		Image             *string             `json:"image"`
+		ImageUrl          *string             `json:"imageUrl"`
+		Name              string              `json:"name"`
+		Genre             string              `json:"genre"`
+		ArtistSocialMedia []ArtistSocialMedia `json:"artist_social_media"`
+	}
+
+	ArtistSocialMedia struct {
+		Link string `json:"link"`
+		Name string `json:"name"`
+	}
 )
