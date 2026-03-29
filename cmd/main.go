@@ -24,6 +24,9 @@ import (
 	orderHandler "rakit-tiket-be/internal/app/app_order/handler"
 	orderService "rakit-tiket-be/internal/app/app_order/service"
 
+	artistHandler "rakit-tiket-be/internal/app/app_artist/handler"
+	artistService "rakit-tiket-be/internal/app/app_artist/service"
+
 	eventHandler "rakit-tiket-be/internal/app/app_event/handler"
 	eventService "rakit-tiket-be/internal/app/app_event/service"
 
@@ -104,6 +107,7 @@ func main() {
 	regService := regService.MakeRegistrantService(log, sqlDB, paymentFactory)
 	ordService := orderService.MakeOrderService(log, sqlDB, paymentFactory, emailSvc)
 	eventSvc := eventService.MakeEventService(log, sqlDB)
+	artistSvc := artistService.MakeArtistService(log, sqlDB)
 
 	// Adapter
 	landingPageAdapter := landingPageHandler.MakeHttpAdapter(landingPageService, fileService, authMiddleware)
@@ -113,6 +117,7 @@ func main() {
 	registrantHttpHandler := regHandler.MakeHttpAdapter(regService)
 	orderHttpHandler := orderHandler.MakeHttpAdapter(log, ordService)
 	eventAdapter := eventHandler.MakeHttpAdapter(eventSvc, authMiddleware)
+	artistAdapter := artistHandler.MakeHttpAdapter(artistSvc, fileService, authMiddleware)
 
 	// Register Routes
 	apiGroup := e.Group("/api")
@@ -124,6 +129,7 @@ func main() {
 	registrantHttpHandler.RegisterRoute(apiGroup)
 	orderHttpHandler.RegisterRoute(apiGroup)
 	eventAdapter.RegisterRoute(apiGroup)
+	artistAdapter.RegisterRoute(apiGroup)
 
 	// Start Server
 	port := envgo.GetString("PORT", "8000")
