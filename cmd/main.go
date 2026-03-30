@@ -114,7 +114,7 @@ func main() {
 	fileAdapter := fileHandler.MakeFileAdapter(log, fileService)
 	authAdapter := authHandler.MakeHttpAdapter(log, authSvc)
 	ticketAdapter := ticketHandler.MakeHttpAdapter(ticketSvc, authMiddleware)
-	registrantHttpHandler := regHandler.MakeHttpAdapter(regService)
+	registrantHttpHandler := regHandler.MakeHttpAdapter(regService, authMiddleware)
 	orderHttpHandler := orderHandler.MakeHttpAdapter(log, ordService)
 	eventAdapter := eventHandler.MakeHttpAdapter(eventSvc, authMiddleware)
 	artistAdapter := artistHandler.MakeHttpAdapter(artistSvc, fileService, authMiddleware)

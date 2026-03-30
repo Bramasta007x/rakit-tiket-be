@@ -2,6 +2,7 @@ package handler
 
 import (
 	"rakit-tiket-be/internal/app/app_registrant/service"
+	"rakit-tiket-be/internal/pkg/middleware"
 
 	"github.com/labstack/echo/v4"
 )
@@ -15,10 +16,13 @@ type httpHandler struct {
 	registrantHandler RegistrantHandler
 }
 
-func MakeHttpAdapter(registrantService service.RegistrantService) HttpHandler {
+func MakeHttpAdapter(
+	registrantService service.RegistrantService,
+	middleware middleware.AuthMiddleware,
+) HttpHandler {
 	return httpHandler{
 		registrantService: registrantService,
-		registrantHandler: MakeRegistrantHandler(registrantService),
+		registrantHandler: MakeRegistrantHandler(registrantService, middleware),
 	}
 }
 

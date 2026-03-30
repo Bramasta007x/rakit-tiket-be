@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"rakit-tiket-be/internal/app/app_registrant/service"
+	"rakit-tiket-be/internal/pkg/middleware"
 	model "rakit-tiket-be/pkg/model/app_registrant"
 
 	"github.com/labstack/echo/v4"
@@ -15,19 +16,29 @@ type RegistrantHandler interface {
 
 type registrantHandler struct {
 	registrantService service.RegistrantService
+	middleware        middleware.AuthMiddleware
 }
 
-func MakeRegistrantHandler(registrantService service.RegistrantService) RegistrantHandler {
+func MakeRegistrantHandler(
+	registrantService service.RegistrantService,
+	middleware middleware.AuthMiddleware,
+) RegistrantHandler {
 	return registrantHandler{
 		registrantService: registrantService,
+		middleware:        middleware,
 	}
 }
 
 func (h registrantHandler) RegisterRouter(g *echo.Group) {
-	public := g.Group("/v1")
+	restricted := g.Group("/v1/admin")
+	restrictedPublic := g.Group("/v1")
 
-	public.POST("/register", h.register)
-	public.GET("/registrants", h.list)
+	restrictedPublic.POST("/register", h.register)
+
+	restricted.Use(h.middleware.VerifyToken)
+	restricted.Use(h.middleware.RequireAdmin)
+
+	restricted.GET("/registrants", h.list)
 }
 
 func (h registrantHandler) register(c echo.Context) error {
