@@ -215,6 +215,13 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 	return nil
 }
 
+func derefString(s *string) string {
+    if s == nil {
+        return ""
+    }
+    return *s
+}
+
 func (s orderService) GetOrderStatus(ctx context.Context, orderNumber string) (*model.OrderStatusResponse, error) {
 	dbTrx := regDao.NewTransactionRegistrant(ctx, s.log, s.sqlDB)
 
@@ -325,8 +332,8 @@ func (s orderService) GetOrderStatus(ctx context.Context, orderNumber string) (*
 	// Return Response
 	return &model.OrderStatusResponse{
 		OrderNumber:    orderData.OrderNumber,
-		PaymentMethod:  *orderData.PaymentMethod,
-		PaymentChannel: *orderData.PaymentChannel,
+		PaymentMethod:  derefString(orderData.PaymentMethod),
+    PaymentChannel: derefString(orderData.PaymentChannel),
 		PaymentStatus:  orderData.PaymentStatus,
 		Amount:         orderData.Amount,
 		PaymentTime:    orderData.PaymentTime,
