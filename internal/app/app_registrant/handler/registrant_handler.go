@@ -27,6 +27,7 @@ func (h registrantHandler) RegisterRouter(g *echo.Group) {
 	public := g.Group("/v1")
 
 	public.POST("/register", h.register)
+	public.GET("/registrants", h.list)
 }
 
 func (h registrantHandler) register(c echo.Context) error {
@@ -37,6 +38,21 @@ func (h registrantHandler) register(c echo.Context) error {
 	}
 
 	resp, err := h.registrantService.Register(c.Request().Context(), req)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, resp)
+}
+
+func (h registrantHandler) list(c echo.Context) error {
+	var filter model.ListFilter
+
+	if err := c.Bind(&filter); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	resp, err := h.registrantService.List(c.Request().Context(), filter)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
