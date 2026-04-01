@@ -79,7 +79,7 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 	}
 
 	// Cari Registrant dan Attendees
-	registrants, err := dbTrx.GetRegistrantDAO().Search(ctx, regEntity.RegistrantQuery{
+	registrants, _, err := dbTrx.GetRegistrantDAO().Search(ctx, regEntity.RegistrantQuery{
 		IDs: []string{string(orderData.RegistrantID)},
 	})
 
@@ -216,10 +216,10 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 }
 
 func derefString(s *string) string {
-    if s == nil {
-        return ""
-    }
-    return *s
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 func (s orderService) GetOrderStatus(ctx context.Context, orderNumber string) (*model.OrderStatusResponse, error) {
@@ -237,7 +237,7 @@ func (s orderService) GetOrderStatus(ctx context.Context, orderNumber string) (*
 	orderData := orders[0]
 
 	// Ambil Registrant
-	registrants, err := dbTrx.GetRegistrantDAO().Search(ctx, regEntity.RegistrantQuery{
+	registrants, _, err := dbTrx.GetRegistrantDAO().Search(ctx, regEntity.RegistrantQuery{
 		IDs: []string{string(orderData.RegistrantID)},
 	})
 
@@ -333,7 +333,7 @@ func (s orderService) GetOrderStatus(ctx context.Context, orderNumber string) (*
 	return &model.OrderStatusResponse{
 		OrderNumber:    orderData.OrderNumber,
 		PaymentMethod:  derefString(orderData.PaymentMethod),
-    PaymentChannel: derefString(orderData.PaymentChannel),
+		PaymentChannel: derefString(orderData.PaymentChannel),
 		PaymentStatus:  orderData.PaymentStatus,
 		Amount:         orderData.Amount,
 		PaymentTime:    orderData.PaymentTime,
