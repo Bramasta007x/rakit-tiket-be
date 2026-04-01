@@ -20,7 +20,6 @@ import (
 	httpModel "rakit-tiket-be/pkg/model/http"
 	"rakit-tiket-be/pkg/util"
 
-	"gitlab.com/threetopia/envgo"
 	"go.uber.org/zap"
 )
 
@@ -352,7 +351,7 @@ func (s registrantService) List(ctx context.Context, req model.SearchRegistrants
 		ticketMap[string(t.ID)] = t
 	}
 
-	baseURL := envgo.GetString("APP_FILE_PATH", "./assets/app_file") + "/tickets/"
+	baseURL := "/api/v1/admin/ticket/"
 
 	return model.MakeSearchRegistrantsResponseModel(http.StatusOK, totalCount, registrants, orderMap, ticketMap, attendeeMap, baseURL)
 }

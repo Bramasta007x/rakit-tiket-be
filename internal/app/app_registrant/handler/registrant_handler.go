@@ -2,12 +2,15 @@ package handler
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"rakit-tiket-be/internal/app/app_registrant/service"
 	"rakit-tiket-be/internal/pkg/middleware"
 	model "rakit-tiket-be/pkg/model/app_registrant"
 
 	"github.com/labstack/echo/v4"
+	"gitlab.com/threetopia/envgo"
 )
 
 type RegistrantHandler interface {
@@ -39,6 +42,7 @@ func (h registrantHandler) RegisterRouter(g *echo.Group) {
 	restricted.Use(h.middleware.RequireAdmin)
 
 	restricted.GET("/registrants", h.list)
+	restricted.GET("/ticket/:filename", h.downloadTicket)
 }
 
 func (h registrantHandler) register(c echo.Context) error {
@@ -66,4 +70,20 @@ func (h registrantHandler) list(c echo.Context) error {
 	httpCode, resp := h.registrantService.List(c.Request().Context(), req)
 
 	return c.JSON(httpCode, resp)
+}
+
+func (h registrantHandler) downloadTicket(c echo.Context) error {
+	filename := c.Param("filename")
+	if filename == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "filename is required")
+	}
+
+	ticketDir := filepath.Join(envgo.GetString("APP_FILE_PATH", "./assets/app_file"), "tickets")
+	filePath := filepath.Join(ticketDir, filename)
+
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return echo.NewHTTPError(http.StatusNotFound, "ticket file not found")
+	}
+
+	return c.File(filePath)
 }
