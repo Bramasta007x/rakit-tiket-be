@@ -57,16 +57,13 @@ func (h registrantHandler) register(c echo.Context) error {
 }
 
 func (h registrantHandler) list(c echo.Context) error {
-	var filter model.ListFilter
+	var req model.SearchRegistrantsRequestModel
 
-	if err := c.Bind(&filter); err != nil {
+	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	resp, err := h.registrantService.List(c.Request().Context(), filter)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
+	httpCode, resp := h.registrantService.List(c.Request().Context(), req)
 
-	return c.JSON(http.StatusOK, resp)
+	return c.JSON(httpCode, resp)
 }

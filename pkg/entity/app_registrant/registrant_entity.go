@@ -14,6 +14,18 @@ type (
 		UniqueCodes []string `query:"unique_code"`
 		Emails      []string `query:"email"`
 		Statuses    []string `query:"status"`
+
+		// List filters
+		Search        string   `query:"search"`
+		TicketTypes   []string `query:"ticket_type"`
+		PaymentStatus []string `query:"payment_status"`
+		DateStart     string   `query:"date_start"`
+		DateEnd       string   `query:"date_end"`
+		SortBy        string   `query:"sort_by"`
+		SortOrder     string   `query:"sort_order"`
+
+		pubEntity.DaoQuery
+		pubEntity.PagingQuery
 	}
 
 	Registrant struct {

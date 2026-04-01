@@ -7,14 +7,14 @@ import (
 
 	pubEntity "rakit-tiket-be/pkg/entity"
 	entity "rakit-tiket-be/pkg/entity/app_registrant"
-	"rakit-tiket-be/pkg/util" // Tambahkan import util
+	"rakit-tiket-be/pkg/util"
 
 	"gitlab.com/threetopia/sqlgo/v2"
-	"go.uber.org/zap" // Tambahkan import zap
+	"go.uber.org/zap"
 )
 
 type RegistrantDAO interface {
-	Search(ctx context.Context, query entity.RegistrantQuery) (entity.Registrants, error)
+	Search(ctx context.Context, query entity.RegistrantQuery) (entity.Registrants, int, error)
 	Insert(ctx context.Context, registrants entity.Registrants) error
 	Update(ctx context.Context, registrants entity.Registrants) error
 	Delete(ctx context.Context, id pubEntity.UUID) error
@@ -33,8 +33,7 @@ func MakeRegistrantDAO(log util.LogUtil, dbTrx DBTransaction) RegistrantDAO {
 	}
 }
 
-func (d registrantDAO) Search(ctx context.Context, query entity.RegistrantQuery) (entity.Registrants, error) {
-
+func (d registrantDAO) Search(ctx context.Context, query entity.RegistrantQuery) (entity.Registrants, int, error) {
 	sqlSelect := sqlgo.NewSQLGoSelect().
 		SetSQLSelect("r.id", "id").
 		SetSQLSelect("r.event_id", "event_id").
@@ -48,6 +47,8 @@ func (d registrantDAO) Search(ctx context.Context, query entity.RegistrantQuery)
 		SetSQLSelect("r.total_cost", "total_cost").
 		SetSQLSelect("r.total_tickets", "total_tickets").
 		SetSQLSelect("r.status", "status").
+		SetSQLSelect("r.data_hash", "data_hash").
+		SetSQLSelect("r.deleted", "deleted").
 		SetSQLSelect("r.created_at", "created_at").
 		SetSQLSelect("r.updated_at", "updated_at")
 
@@ -78,11 +79,21 @@ func (d registrantDAO) Search(ctx context.Context, query entity.RegistrantQuery)
 		sqlWhere.SetSQLWhere("AND", "r.status", "IN", query.Statuses)
 	}
 
+	sqlOffsetLimit := sqlgo.NewSQLGoOffsetLimit()
+	if !query.PagingQuery.NoLimit {
+		if query.PagingQuery.Page > 0 {
+			sqlOffsetLimit.SQLPageLimit(query.PagingQuery.Page.Int(), query.PagingQuery.Limit.Int())
+		} else {
+			sqlOffsetLimit.SetSQLLimit(query.PagingQuery.Limit.Int())
+		}
+	}
+
 	sql := sqlgo.NewSQLGo().
 		SetSQLSchema("public").
 		SetSQLGoSelect(sqlSelect).
 		SetSQLGoFrom(sqlFrom).
-		SetSQLGoWhere(sqlWhere)
+		SetSQLGoWhere(sqlWhere).
+		SetSQLGoOffsetLimit(sqlOffsetLimit)
 
 	sqlStr := sql.BuildSQL()
 	sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
@@ -99,7 +110,7 @@ func (d registrantDAO) Search(ctx context.Context, query entity.RegistrantQuery)
 			zap.Any("Params", sqlParams),
 			zap.Error(err),
 		)
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -120,17 +131,85 @@ func (d registrantDAO) Search(ctx context.Context, query entity.RegistrantQuery)
 			&reg.TotalCost,
 			&reg.TotalTickets,
 			&reg.Status,
-			&reg.CreatedAt,
-			&reg.UpdatedAt,
+			&reg.DaoEntity.DataHash,
+			&reg.DaoEntity.Deleted,
+			&reg.DaoEntity.CreatedAt,
+			&reg.DaoEntity.UpdatedAt,
 		); err != nil {
 			d.log.Error(ctx, "registrantDAO.Search.Scan", zap.Error(err))
-			return nil, err
+			return nil, 0, err
 		}
 
 		registrants = append(registrants, reg)
 	}
 
-	return registrants, nil
+	totalCount, err := d.Count(ctx, query)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return registrants, totalCount, nil
+}
+
+func (d registrantDAO) Count(ctx context.Context, query entity.RegistrantQuery) (int, error) {
+	sqlSelect := sqlgo.NewSQLGoSelect()
+	sqlSelect.SetSQLSelect("COUNT(r.id)", "count")
+
+	sqlFrom := sqlgo.NewSQLGoFrom()
+	sqlFrom.SetSQLFrom("registrants", "r")
+
+	sqlJoin := sqlgo.NewSQLGoJoin()
+
+	sqlWhere := sqlgo.NewSQLGoWhere()
+	sqlWhere.SetSQLWhere("AND", "r.deleted", "=", false)
+
+	if len(query.IDs) > 0 {
+		sqlWhere.SetSQLWhere("AND", "r.id", "IN", query.IDs)
+	}
+
+	if len(query.EventIDs) > 0 {
+		sqlWhere.SetSQLWhere("AND", "r.event_id", "IN", query.EventIDs)
+	}
+
+	if len(query.UniqueCodes) > 0 {
+		sqlWhere.SetSQLWhere("AND", "r.unique_code", "IN", query.UniqueCodes)
+	}
+
+	if len(query.Emails) > 0 {
+		sqlWhere.SetSQLWhere("AND", "r.email", "IN", query.Emails)
+	}
+
+	if len(query.Statuses) > 0 {
+		sqlWhere.SetSQLWhere("AND", "r.status", "IN", query.Statuses)
+	}
+
+	sql := sqlgo.NewSQLGo().
+		SetSQLSchema("public").
+		SetSQLGoSelect(sqlSelect).
+		SetSQLGoFrom(sqlFrom).
+		SetSQLGoJoin(sqlJoin).
+		SetSQLGoWhere(sqlWhere)
+
+	sqlStr := sql.BuildSQL()
+	sqlParams := sql.GetSQLGoParameter().GetSQLParameter()
+
+	d.log.Debug(ctx, "registrantDAO.Count",
+		zap.String("SQL", sqlStr),
+		zap.Any("Params", sqlParams),
+	)
+
+	var totalCount int
+	err := d.dbTrx.GetSqlDB().QueryRowContext(ctx, sqlStr, sqlParams...).Scan(&totalCount)
+	if err != nil {
+		d.log.Error(ctx, "registrantDAO.Count",
+			zap.String("SQL", sqlStr),
+			zap.Any("Params", sqlParams),
+			zap.Error(err),
+		)
+		return 0, err
+	}
+
+	return totalCount, nil
 }
 
 func (d registrantDAO) Insert(ctx context.Context, registrants entity.Registrants) error {
