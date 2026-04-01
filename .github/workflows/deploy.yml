@@ -28,4 +28,4 @@ jobs:
             
             # 3. Jalankan Docker Compose dari folder BE
             cd ~/rakit-tiket-core/rakit-tiket-be
-            docker compose up -d --build
+            docker compose --env-file .env --env-file ../rakit-tiket-fe/.env up -d --build

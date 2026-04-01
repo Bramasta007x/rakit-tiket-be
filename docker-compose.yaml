@@ -57,12 +57,20 @@ services:
     build:
       context: ../rakit-tiket-fe
       dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+        VITE_MIDTRANS_CLIENT_KEY: ${VITE_MIDTRANS_CLIENT_KEY}
+        VITE_MIDTRANS_IS_PRODUCTION: ${VITE_MIDTRANS_IS_PRODUCTION}
+        VITE_IS_DEMO: ${VITE_IS_DEMO}
     container_name: rakit-tiket-fe
     ports:
       - "3000:80"
     restart: always
     environment:
-      - VITE_API_BASE_URL=http://212.85.24.75:8000/api
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL}
+      - VITE_MIDTRANS_CLIENT_KEY=${VITE_MIDTRANS_CLIENT_KEY}
+      - VITE_MIDTRANS_IS_PRODUCTION=${VITE_MIDTRANS_IS_PRODUCTION}
+      - VITE_IS_DEMO=${VITE_IS_DEMO}
 
   swagger-ui:
     image: swaggerapi/swagger-ui
