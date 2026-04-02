@@ -354,7 +354,10 @@ func (s registrantService) List(ctx context.Context, req model.SearchRegistrants
 
 	baseURL := "/api/v1/admin/ticket/"
 
-	return model.MakeSearchRegistrantsResponseModel(http.StatusOK, totalCount, registrants, orderMap, ticketMap, attendeeMap, baseURL)
+	page := int(query.PagingQuery.Page)
+	limit := int(query.PagingQuery.Limit)
+
+	return model.MakeSearchRegistrantsResponseModel(http.StatusOK, totalCount, registrants, orderMap, ticketMap, attendeeMap, baseURL, page, limit)
 }
 
 func (s registrantService) GetSummary(ctx context.Context) (int, model.SummaryResponseModel) {

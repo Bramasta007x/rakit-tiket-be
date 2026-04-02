@@ -88,17 +88,38 @@ type (
 
 	SearchRegistrantsResponseModel struct {
 		httpModel.HTTPResponseModel
-		Data RegistrantsModel `json:"data"`
+		Data       RegistrantsModel `json:"data"`
+		Pagination PaginationInfo   `json:"pagination"`
+	}
+
+	PaginationInfo struct {
+		CurrentPage int `json:"current_page"`
+		PerPage     int `json:"per_page"`
+		TotalPages  int `json:"total_pages"`
+		TotalCount  int `json:"total_count"`
+		Count       int `json:"count"`
 	}
 )
 
-func MakeSearchRegistrantsResponseModel(httpCode, count int, registrants appRegistrantEntity.Registrants, orderMap map[string]orderEntity.Order, ticketMap map[string]ticketEntity.Ticket, attendeeMap map[string][]appRegistrantEntity.Attendee, baseURL string) (int, SearchRegistrantsResponseModel) {
+func MakeSearchRegistrantsResponseModel(httpCode, count int, registrants appRegistrantEntity.Registrants, orderMap map[string]orderEntity.Order, ticketMap map[string]ticketEntity.Ticket, attendeeMap map[string][]appRegistrantEntity.Attendee, baseURL string, page, limit int) (int, SearchRegistrantsResponseModel) {
+	totalPages := 0
+	if limit > 0 {
+		totalPages = (count + limit - 1) / limit
+	}
+
 	return httpCode, SearchRegistrantsResponseModel{
 		HTTPResponseModel: httpModel.HTTPResponseModel{
 			Code:  httpCode,
 			Count: count,
 		},
 		Data: MakeRegistrantsModelFromEntity(registrants, orderMap, ticketMap, attendeeMap, baseURL),
+		Pagination: PaginationInfo{
+			CurrentPage: page,
+			PerPage:     limit,
+			TotalPages:  totalPages,
+			TotalCount:  count,
+			Count:       len(registrants),
+		},
 	}
 }
 
