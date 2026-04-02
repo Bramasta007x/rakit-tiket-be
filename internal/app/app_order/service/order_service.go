@@ -155,7 +155,7 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 		_ = s.sqlDB.QueryRowContext(ctx, "SELECT event_date, event_time_start, event_time_end, event_location FROM landing_pages WHERE event_id = $1", orderData.EventID).
 			Scan(&dynamicEvent.EventDate, &dynamicEvent.EventTimeStart, &dynamicEvent.EventTimeEnd, &dynamicEvent.EventLocation)
 
-		attachments, err := GenerateTicketsPDF(orderData, registrantData, attendees, ticketMap, dynamicEvent)
+		attachments, err := GenerateTicketsPDF(orderData, registrantData, ticketMap, dynamicEvent)
 		if err != nil {
 			s.log.Error(ctx, "Failed to generate PDF tickets", zap.Error(err))
 		} else {

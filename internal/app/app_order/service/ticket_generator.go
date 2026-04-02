@@ -65,7 +65,6 @@ func formatRupiah(amount float64) string {
 func GenerateTicketsPDF(
 	order orderEntity.Order,
 	registrant regEntity.Registrant,
-	attendees []regEntity.Attendee,
 	ticketMap map[string]ticketEntity.Ticket,
 	eventData EventDynamicData,
 ) ([]TicketAttachment, error) {
@@ -85,9 +84,6 @@ func GenerateTicketsPDF(
 
 	if registrant.TicketID != nil {
 		owners = append(owners, Owner{Name: registrant.Name, TicketID: string(*registrant.TicketID)})
-	}
-	for _, att := range attendees {
-		owners = append(owners, Owner{Name: att.Name, TicketID: string(att.TicketID)})
 	}
 
 	// Persiapkan Folder Asset Storage (Supaya Admin Bisa Download)
