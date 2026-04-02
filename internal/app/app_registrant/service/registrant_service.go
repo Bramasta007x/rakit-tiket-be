@@ -26,6 +26,7 @@ import (
 type RegistrantService interface {
 	Register(ctx context.Context, req model.RegisterRequest) (*model.RegisterResponse, error)
 	List(ctx context.Context, req model.SearchRegistrantsRequestModel) (int, model.SearchRegistrantsResponseModel)
+	GetSummary(ctx context.Context) (int, model.SummaryResponseModel)
 }
 
 type registrantService struct {
@@ -354,4 +355,67 @@ func (s registrantService) List(ctx context.Context, req model.SearchRegistrants
 	baseURL := "/api/v1/admin/ticket/"
 
 	return model.MakeSearchRegistrantsResponseModel(http.StatusOK, totalCount, registrants, orderMap, ticketMap, attendeeMap, baseURL)
+}
+
+func (s registrantService) GetSummary(ctx context.Context) (int, model.SummaryResponseModel) {
+	dbTrx := dao.NewTransactionRegistrant(ctx, s.log, s.sqlDB)
+
+	registrants, _, err := dbTrx.GetRegistrantDAO().Search(ctx, regEntity.RegistrantQuery{
+		DaoQuery: pubEntity.DaoQuery{
+			Deleted: []bool{false},
+		},
+	})
+	if err != nil {
+		s.log.Error(ctx, "registrantService.GetSummary.SearchRegistrants", zap.Error(err))
+		return http.StatusInternalServerError, model.SummaryResponseModel{}
+	}
+
+	var regIDs []string
+	for _, r := range registrants {
+		regIDs = append(regIDs, string(r.ID))
+	}
+
+	orders, err := dbTrx.GetOrderDAO().Search(ctx, orderEntity.OrderQuery{
+		RegistrantIDs: regIDs,
+	})
+	if err != nil {
+		s.log.Error(ctx, "registrantService.GetSummary.GetOrders", zap.Error(err))
+		return http.StatusInternalServerError, model.SummaryResponseModel{}
+	}
+
+	attendees, err := dbTrx.GetAttendeeDAO().Search(ctx, regEntity.AttendeeQuery{
+		RegistrantIDs: regIDs,
+	})
+	if err != nil {
+		s.log.Error(ctx, "registrantService.GetSummary.GetAttendees", zap.Error(err))
+		return http.StatusInternalServerError, model.SummaryResponseModel{}
+	}
+
+	summary := model.SummaryData{
+		TotalRegistrants:   len(registrants),
+		TotalAttendees:     len(attendees),
+		TotalTickets:       0,
+		TotalRevenue:       0,
+		PaidRegistrants:    0,
+		PendingRegistrants: 0,
+		FailedRegistrants:  0,
+	}
+
+	for _, r := range registrants {
+		summary.TotalTickets += r.TotalTickets
+	}
+
+	for _, o := range orders {
+		switch o.PaymentStatus {
+		case "paid":
+			summary.PaidRegistrants++
+			summary.TotalRevenue += o.Amount
+		case "pending":
+			summary.PendingRegistrants++
+		case "failed":
+			summary.FailedRegistrants++
+		}
+	}
+
+	return model.MakeSummaryResponseModel(http.StatusOK, summary)
 }

@@ -56,6 +56,30 @@ type RegistrantInfo struct {
 	UniqueCode string `json:"unique_code"`
 }
 
+type SummaryResponseModel struct {
+	httpModel.HTTPResponseModel
+	Data SummaryData `json:"data"`
+}
+
+type SummaryData struct {
+	TotalRegistrants   int     `json:"total_registrants"`
+	TotalAttendees     int     `json:"total_attendees"`
+	TotalTickets       int     `json:"total_tickets"`
+	TotalRevenue       float64 `json:"total_revenue"`
+	PaidRegistrants    int     `json:"paid_registrants"`
+	PendingRegistrants int     `json:"pending_registrants"`
+	FailedRegistrants  int     `json:"failed_registrants"`
+}
+
+func MakeSummaryResponseModel(httpCode int, summary SummaryData) (int, SummaryResponseModel) {
+	return httpCode, SummaryResponseModel{
+		HTTPResponseModel: httpModel.HTTPResponseModel{
+			Code: httpCode,
+		},
+		Data: summary,
+	}
+}
+
 type (
 	SearchRegistrantsRequestModel struct {
 		httpModel.HTTPRequestModel
