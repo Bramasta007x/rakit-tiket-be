@@ -55,9 +55,25 @@ func (d registrantDAO) Search(ctx context.Context, query entity.RegistrantQuery)
 	sqlFrom := sqlgo.NewSQLGoFrom().
 		SetSQLFrom("registrants", "r")
 
-	sqlWhere := sqlgo.NewSQLGoWhere()
+	sqlJoin := sqlgo.NewSQLGoJoin()
+	if query.Search != "" || len(query.PaymentStatus) > 0 {
+		sqlJoin.SetSQLJoin("LEFT", "orders", "o", sqlgo.SetSQLJoinWhere("AND", "o.registrant_id", "=", "r.id"))
+	}
+	if len(query.TicketTypes) > 0 {
+		sqlJoin.SetSQLJoin("LEFT", "tickets", "rt", sqlgo.SetSQLJoinWhere("AND", "rt.id", "=", "r.ticket_id"))
+		sqlJoin.SetSQLJoin("LEFT", "attendees", "a", sqlgo.SetSQLJoinWhere("AND", "a.registrant_id", "=", "r.id"))
+		sqlJoin.SetSQLJoin("LEFT", "tickets", "at", sqlgo.SetSQLJoinWhere("AND", "at.id", "=", "a.ticket_id"))
+	}
 
+	sqlWhere := sqlgo.NewSQLGoWhere()
 	sqlWhere.SetSQLWhere("AND", "r.deleted", "=", false)
+
+	if query.Search != "" {
+		searchPattern := "%" + query.Search + "%"
+		sqlWhere.SetSQLWhere("AND", "r.name", "ILIKE", searchPattern)
+		sqlWhere.SetSQLWhere("OR", "r.email", "ILIKE", searchPattern)
+		sqlWhere.SetSQLWhere("OR", "o.order_number", "ILIKE", searchPattern)
+	}
 
 	if len(query.IDs) > 0 {
 		sqlWhere.SetSQLWhere("AND", "r.id", "IN", query.IDs)
@@ -79,6 +95,41 @@ func (d registrantDAO) Search(ctx context.Context, query entity.RegistrantQuery)
 		sqlWhere.SetSQLWhere("AND", "r.status", "IN", query.Statuses)
 	}
 
+	if len(query.PaymentStatus) > 0 {
+		sqlWhere.SetSQLWhere("AND", "o.payment_status", "IN", query.PaymentStatus)
+	}
+
+	if len(query.TicketTypes) > 0 {
+		sqlWhere.SetSQLWhere("AND", "rt.type", "IN", query.TicketTypes)
+		sqlWhere.SetSQLWhere("OR", "at.type", "IN", query.TicketTypes)
+	}
+
+	if query.DateStart != "" {
+		sqlWhere.SetSQLWhere("AND", "DATE(r.created_at)", ">=", query.DateStart)
+	}
+
+	if query.DateEnd != "" {
+		sqlWhere.SetSQLWhere("AND", "DATE(r.created_at)", "<=", query.DateEnd)
+	}
+
+	sortBy := "r.created_at"
+	switch query.SortBy {
+	case "total_cost":
+		sortBy = "r.total_cost"
+	case "name":
+		sortBy = "r.name"
+	case "email":
+		sortBy = "r.email"
+	}
+
+	sortOrder := "DESC"
+	if query.SortOrder == "asc" {
+		sortOrder = "ASC"
+	}
+
+	sqlOrder := sqlgo.NewSQLGoOrder()
+	sqlOrder.SetSQLOrder(sortBy, sortOrder)
+
 	sqlOffsetLimit := sqlgo.NewSQLGoOffsetLimit()
 	if !query.PagingQuery.NoLimit {
 		if query.PagingQuery.Page > 0 {
@@ -92,7 +143,9 @@ func (d registrantDAO) Search(ctx context.Context, query entity.RegistrantQuery)
 		SetSQLSchema("public").
 		SetSQLGoSelect(sqlSelect).
 		SetSQLGoFrom(sqlFrom).
+		SetSQLGoJoin(sqlJoin).
 		SetSQLGoWhere(sqlWhere).
+		SetSQLGoOrder(sqlOrder).
 		SetSQLGoOffsetLimit(sqlOffsetLimit)
 
 	sqlStr := sql.BuildSQL()
