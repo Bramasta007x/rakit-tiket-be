@@ -52,4 +52,50 @@ type (
 	}
 
 	Registrants []Registrant
+
+	DashboardSummary struct {
+		TotalTicketsSold  int     `json:"total_tickets_sold"`
+		TicketsSoldChange float64 `json:"tickets_sold_change"`
+		TotalRegistrants  int     `json:"total_registrants"`
+		RegistrantsChange float64 `json:"registrants_change"`
+		TotalRevenue      float64 `json:"total_revenue"`
+		RevenueChange     float64 `json:"revenue_change"`
+		ActiveEvents      int     `json:"active_events"`
+	}
+
+	DailySales struct {
+		Date        string  `json:"date"`
+		TicketsSold int     `json:"tickets_sold"`
+		Revenue     float64 `json:"revenue"`
+	}
+
+	DailySalesTrend []DailySales
+
+	TicketDistribution struct {
+		TicketType    string  `json:"ticket_type"`
+		TicketsSold   int     `json:"tickets_sold"`
+		TotalCapacity int     `json:"total_capacity"`
+		Percentage    float64 `json:"percentage"`
+	}
+
+	TicketDistributions []TicketDistribution
+
+	RecentTransaction struct {
+		ID         string  `json:"id"`
+		BuyerName  string  `json:"buyer_name"`
+		TicketType string  `json:"ticket_type"`
+		Quantity   int     `json:"quantity"`
+		Amount     float64 `json:"amount"`
+		Status     string  `json:"status"`
+		TimeAgo    string  `json:"time_ago"`
+	}
+
+	RecentTransactions []RecentTransaction
+
+	DashboardData struct {
+		Summary             DashboardSummary    `json:"summary"`
+		DailySalesTrend     DailySalesTrend     `json:"daily_sales_trend"`
+		TicketDistributions TicketDistributions `json:"ticket_distribution"`
+		RecentTransactions  RecentTransactions  `json:"recent_transactions"`
+	}
 )

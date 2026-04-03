@@ -43,6 +43,7 @@ func (h registrantHandler) RegisterRouter(g *echo.Group) {
 
 	restricted.GET("/registrants", h.list)
 	restricted.GET("/summary", h.summary)
+	restricted.GET("/dashboard", h.dashboard)
 	restricted.GET("/ticket/:filename", h.downloadTicket)
 }
 
@@ -75,6 +76,18 @@ func (h registrantHandler) list(c echo.Context) error {
 
 func (h registrantHandler) summary(c echo.Context) error {
 	httpCode, resp := h.registrantService.GetSummary(c.Request().Context())
+
+	return c.JSON(httpCode, resp)
+}
+
+func (h registrantHandler) dashboard(c echo.Context) error {
+	var req model.DashboardRequestModel
+
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	httpCode, resp := h.registrantService.GetDashboard(c.Request().Context(), req)
 
 	return c.JSON(httpCode, resp)
 }

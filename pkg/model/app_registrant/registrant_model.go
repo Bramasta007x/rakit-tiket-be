@@ -81,6 +81,128 @@ func MakeSummaryResponseModel(httpCode int, summary SummaryData) (int, SummaryRe
 }
 
 type (
+	DashboardRequestModel struct {
+		httpModel.HTTPRequestModel
+		Days        int `query:"days"`
+		RecentLimit int `query:"recent_limit"`
+	}
+
+	DashboardResponseModel struct {
+		httpModel.HTTPResponseModel
+		Data DashboardData `json:"data"`
+	}
+
+	DashboardData struct {
+		Summary             DashboardSummaryModel    `json:"summary"`
+		DailySalesTrend     DailySalesTrendModel     `json:"daily_sales_trend"`
+		TicketDistributions TicketDistributionsModel `json:"ticket_distribution"`
+		RecentTransactions  RecentTransactionsModel  `json:"recent_transactions"`
+	}
+
+	DashboardSummaryModel struct {
+		TotalTicketsSold  int     `json:"total_tickets_sold"`
+		TicketsSoldChange float64 `json:"tickets_sold_change"`
+		TotalRegistrants  int     `json:"total_registrants"`
+		RegistrantsChange float64 `json:"registrants_change"`
+		TotalRevenue      float64 `json:"total_revenue"`
+		RevenueChange     float64 `json:"revenue_change"`
+		ActiveEvents      int     `json:"active_events"`
+	}
+
+	DailySalesModel struct {
+		Date        string  `json:"date"`
+		TicketsSold int     `json:"tickets_sold"`
+		Revenue     float64 `json:"revenue"`
+	}
+
+	DailySalesTrendModel []DailySalesModel
+
+	TicketDistributionModel struct {
+		TicketType    string  `json:"ticket_type"`
+		TicketsSold   int     `json:"tickets_sold"`
+		TotalCapacity int     `json:"total_capacity"`
+		Percentage    float64 `json:"percentage"`
+	}
+
+	TicketDistributionsModel []TicketDistributionModel
+
+	RecentTransactionModel struct {
+		ID         string  `json:"id"`
+		BuyerName  string  `json:"buyer_name"`
+		TicketType string  `json:"ticket_type"`
+		Quantity   int     `json:"quantity"`
+		Amount     float64 `json:"amount"`
+		Status     string  `json:"status"`
+		TimeAgo    string  `json:"time_ago"`
+	}
+
+	RecentTransactionsModel []RecentTransactionModel
+)
+
+func MakeDashboardResponseModel(httpCode int, dashboard appRegistrantEntity.DashboardData) (int, DashboardResponseModel) {
+	return httpCode, DashboardResponseModel{
+		HTTPResponseModel: httpModel.HTTPResponseModel{
+			Code: httpCode,
+		},
+		Data: DashboardData{
+			Summary: DashboardSummaryModel{
+				TotalTicketsSold:  dashboard.Summary.TotalTicketsSold,
+				TicketsSoldChange: dashboard.Summary.TicketsSoldChange,
+				TotalRegistrants:  dashboard.Summary.TotalRegistrants,
+				RegistrantsChange: dashboard.Summary.RegistrantsChange,
+				TotalRevenue:      dashboard.Summary.TotalRevenue,
+				RevenueChange:     dashboard.Summary.RevenueChange,
+				ActiveEvents:      dashboard.Summary.ActiveEvents,
+			},
+			DailySalesTrend:     MakeDailySalesTrendModel(dashboard.DailySalesTrend),
+			TicketDistributions: MakeTicketDistributionsModel(dashboard.TicketDistributions),
+			RecentTransactions:  MakeRecentTransactionsModel(dashboard.RecentTransactions),
+		},
+	}
+}
+
+func MakeDailySalesTrendModel(trend appRegistrantEntity.DailySalesTrend) DailySalesTrendModel {
+	var result DailySalesTrendModel
+	for _, d := range trend {
+		result = append(result, DailySalesModel{
+			Date:        d.Date,
+			TicketsSold: d.TicketsSold,
+			Revenue:     d.Revenue,
+		})
+	}
+	return result
+}
+
+func MakeTicketDistributionsModel(distributions appRegistrantEntity.TicketDistributions) TicketDistributionsModel {
+	var result TicketDistributionsModel
+	for _, d := range distributions {
+		result = append(result, TicketDistributionModel{
+			TicketType:    d.TicketType,
+			TicketsSold:   d.TicketsSold,
+			TotalCapacity: d.TotalCapacity,
+			Percentage:    d.Percentage,
+		})
+	}
+	return result
+}
+
+func MakeRecentTransactionsModel(transactions appRegistrantEntity.RecentTransactions) RecentTransactionsModel {
+	var result RecentTransactionsModel
+	for _, t := range transactions {
+		result = append(result, RecentTransactionModel{
+			ID:         t.ID,
+			BuyerName:  t.BuyerName,
+			TicketType: t.TicketType,
+			Quantity:   t.Quantity,
+			Amount:     t.Amount,
+			Status:     t.Status,
+			TimeAgo:    t.TimeAgo,
+		})
+	}
+	return result
+}
+
+type (
 	SearchRegistrantsRequestModel struct {
 		httpModel.HTTPRequestModel
 		appRegistrantEntity.RegistrantQuery

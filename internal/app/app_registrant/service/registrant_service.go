@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -27,6 +28,7 @@ type RegistrantService interface {
 	Register(ctx context.Context, req model.RegisterRequest) (*model.RegisterResponse, error)
 	List(ctx context.Context, req model.SearchRegistrantsRequestModel) (int, model.SearchRegistrantsResponseModel)
 	GetSummary(ctx context.Context) (int, model.SummaryResponseModel)
+	GetDashboard(ctx context.Context, req model.DashboardRequestModel) (int, model.DashboardResponseModel)
 }
 
 type registrantService struct {
@@ -421,4 +423,293 @@ func (s registrantService) GetSummary(ctx context.Context) (int, model.SummaryRe
 	}
 
 	return model.MakeSummaryResponseModel(http.StatusOK, summary)
+}
+
+func (s registrantService) GetDashboard(ctx context.Context, req model.DashboardRequestModel) (int, model.DashboardResponseModel) {
+	dbTrx := dao.NewTransactionRegistrant(ctx, s.log, s.sqlDB)
+
+	days := 7
+	if req.Days > 0 {
+		days = req.Days
+	}
+	limit := 10
+	if req.RecentLimit > 0 {
+		limit = req.RecentLimit
+	}
+
+	summary := s.buildDashboardSummary(ctx, dbTrx)
+	dailySales := s.buildDailySalesTrend(ctx, dbTrx, days)
+	ticketDist := s.buildTicketDistribution(ctx, dbTrx)
+	recentTx := s.buildRecentTransactions(ctx, dbTrx, limit)
+
+	dashboardData := regEntity.DashboardData{
+		Summary:             summary,
+		DailySalesTrend:     dailySales,
+		TicketDistributions: ticketDist,
+		RecentTransactions:  recentTx,
+	}
+
+	return model.MakeDashboardResponseModel(http.StatusOK, dashboardData)
+}
+
+func (s registrantService) buildDashboardSummary(ctx context.Context, dbTrx dao.DBTransaction) regEntity.DashboardSummary {
+	now := time.Now()
+	thisMonthStart := now.AddDate(0, 0, -30)
+	lastMonthStart := now.AddDate(0, -1, -30)
+
+	allRegistrants, _, _ := dbTrx.GetRegistrantDAO().Search(ctx, regEntity.RegistrantQuery{
+		DaoQuery: pubEntity.DaoQuery{Deleted: []bool{false}},
+	})
+	thisMonthRegistrants, _, _ := dbTrx.GetRegistrantDAO().Search(ctx, regEntity.RegistrantQuery{
+		DaoQuery: pubEntity.DaoQuery{Deleted: []bool{false}},
+	})
+
+	allOrders, _ := dbTrx.GetOrderDAO().Search(ctx, orderEntity.OrderQuery{})
+	thisMonthOrders, _ := dbTrx.GetOrderDAO().Search(ctx, orderEntity.OrderQuery{})
+
+	var thisTicketsSold, lastTicketsSold int
+	var thisRegistrants, lastRegistrants int
+	var thisRevenue, lastRevenue float64
+	var activeEventIDs []string
+
+	eventIDMap := make(map[string]bool)
+
+	for _, r := range allRegistrants {
+		if _, exists := eventIDMap[string(r.EventID)]; !exists {
+			eventIDMap[string(r.EventID)] = true
+			activeEventIDs = append(activeEventIDs, string(r.EventID))
+		}
+	}
+
+	for _, r := range thisMonthRegistrants {
+		if r.CreatedAt.After(thisMonthStart) || r.CreatedAt.Equal(thisMonthStart) {
+			thisRegistrants++
+			thisTicketsSold += r.TotalTickets
+		}
+	}
+
+	for _, r := range allRegistrants {
+		if r.CreatedAt.After(lastMonthStart) && r.CreatedAt.Before(thisMonthStart) {
+			lastRegistrants++
+			lastTicketsSold += r.TotalTickets
+		}
+	}
+
+	for _, o := range thisMonthOrders {
+		if o.CreatedAt.After(thisMonthStart) || o.CreatedAt.Equal(thisMonthStart) {
+			if o.PaymentStatus == "paid" {
+				thisRevenue += o.Amount
+			}
+		}
+	}
+
+	for _, o := range allOrders {
+		if o.CreatedAt.After(lastMonthStart) && o.CreatedAt.Before(thisMonthStart) {
+			if o.PaymentStatus == "paid" {
+				lastRevenue += o.Amount
+			}
+		}
+	}
+
+	calcChange := func(current, previous int) float64 {
+		if previous == 0 {
+			return 0
+		}
+		return float64(current-previous) / float64(previous) * 100
+	}
+
+	return regEntity.DashboardSummary{
+		TotalTicketsSold:  thisTicketsSold,
+		TicketsSoldChange: calcChange(thisTicketsSold, lastTicketsSold),
+		TotalRegistrants:  thisRegistrants,
+		RegistrantsChange: calcChange(thisRegistrants, lastRegistrants),
+		TotalRevenue:      thisRevenue,
+		RevenueChange:     calcChange(int(thisRevenue), int(lastRevenue)),
+		ActiveEvents:      len(activeEventIDs),
+	}
+}
+
+func (s registrantService) buildDailySalesTrend(ctx context.Context, dbTrx dao.DBTransaction, days int) regEntity.DailySalesTrend {
+	now := time.Now()
+	startDate := now.AddDate(0, 0, -days)
+
+	orders, _ := dbTrx.GetOrderDAO().Search(ctx, orderEntity.OrderQuery{})
+	registrants, _, _ := dbTrx.GetRegistrantDAO().Search(ctx, regEntity.RegistrantQuery{
+		DaoQuery: pubEntity.DaoQuery{Deleted: []bool{false}},
+	})
+
+	regMap := make(map[string]regEntity.Registrant)
+	for _, r := range registrants {
+		regMap[string(r.ID)] = r
+	}
+
+	dailyMap := make(map[string]regEntity.DailySales)
+	for i := days - 1; i >= 0; i-- {
+		date := now.AddDate(0, 0, -i)
+		dateStr := date.Format("2006-01-02")
+		dailyMap[dateStr] = regEntity.DailySales{Date: dateStr, TicketsSold: 0, Revenue: 0}
+	}
+
+	for _, o := range orders {
+		if o.CreatedAt.After(startDate) || o.CreatedAt.Equal(startDate) {
+			dateStr := o.CreatedAt.Format("2006-01-02")
+			if ds, exists := dailyMap[dateStr]; exists {
+				if r, ok := regMap[string(o.RegistrantID)]; ok {
+					ds.TicketsSold += r.TotalTickets
+					if o.PaymentStatus == "paid" {
+						ds.Revenue += o.Amount
+					}
+					dailyMap[dateStr] = ds
+				}
+			}
+		}
+	}
+
+	var trend regEntity.DailySalesTrend
+	for i := days - 1; i >= 0; i-- {
+		date := now.AddDate(0, 0, -i)
+		dateStr := date.Format("2006-01-02")
+		trend = append(trend, dailyMap[dateStr])
+	}
+
+	return trend
+}
+
+func (s registrantService) buildTicketDistribution(ctx context.Context, dbTrx dao.DBTransaction) regEntity.TicketDistributions {
+	tickets, _ := dbTrx.GetTicketDAO().Search(ctx, ticketEntity.TicketQuery{})
+	registrants, _, _ := dbTrx.GetRegistrantDAO().Search(ctx, regEntity.RegistrantQuery{
+		DaoQuery: pubEntity.DaoQuery{Deleted: []bool{false}},
+	})
+
+	typeCount := make(map[string]struct {
+		sold     int
+		capacity int
+	})
+	totalSold := 0
+
+	for _, r := range registrants {
+		if r.TicketID != nil {
+			ticketID := string(*r.TicketID)
+			if _, exists := typeCount[ticketID]; !exists {
+				for _, t := range tickets {
+					if string(t.ID) == ticketID {
+						typeCount[ticketID] = struct {
+							sold     int
+							capacity int
+						}{sold: 0, capacity: t.Total}
+						break
+					}
+				}
+			}
+			count := typeCount[ticketID]
+			count.sold += r.TotalTickets
+			totalSold += r.TotalTickets
+			typeCount[ticketID] = count
+		}
+	}
+
+	var distributions regEntity.TicketDistributions
+	ticketTypeMap := make(map[string]string)
+
+	for _, t := range tickets {
+		ticketTypeMap[string(t.ID)] = t.Type
+	}
+
+	for ticketID, data := range typeCount {
+		ticketType := ticketTypeMap[ticketID]
+		if ticketType == "" {
+			ticketType = "UNKNOWN"
+		}
+
+		percentage := 0.0
+		if totalSold > 0 {
+			percentage = float64(data.sold) / float64(totalSold) * 100
+		}
+
+		distributions = append(distributions, regEntity.TicketDistribution{
+			TicketType:    ticketType,
+			TicketsSold:   data.sold,
+			TotalCapacity: data.capacity,
+			Percentage:    percentage,
+		})
+	}
+
+	return distributions
+}
+
+func (s registrantService) buildRecentTransactions(ctx context.Context, dbTrx dao.DBTransaction, limit int) regEntity.RecentTransactions {
+	orders, _ := dbTrx.GetOrderDAO().Search(ctx, orderEntity.OrderQuery{})
+	registrants, _, _ := dbTrx.GetRegistrantDAO().Search(ctx, regEntity.RegistrantQuery{
+		DaoQuery: pubEntity.DaoQuery{Deleted: []bool{false}},
+	})
+	tickets, _ := dbTrx.GetTicketDAO().Search(ctx, ticketEntity.TicketQuery{})
+
+	regMap := make(map[string]regEntity.Registrant)
+	for _, r := range registrants {
+		regMap[string(r.ID)] = r
+	}
+
+	ticketMap := make(map[string]ticketEntity.Ticket)
+	for _, t := range tickets {
+		ticketMap[string(t.ID)] = t
+	}
+
+	type transactionWithTime struct {
+		order      orderEntity.Order
+		registrant regEntity.Registrant
+	}
+
+	var txs []transactionWithTime
+	for _, o := range orders {
+		if r, ok := regMap[string(o.RegistrantID)]; ok {
+			txs = append(txs, transactionWithTime{order: o, registrant: r})
+		}
+	}
+
+	sort.Slice(txs, func(i, j int) bool {
+		return txs[i].order.CreatedAt.After(txs[j].order.CreatedAt)
+	})
+
+	if len(txs) > limit {
+		txs = txs[:limit]
+	}
+
+	now := time.Now()
+	var recentTx regEntity.RecentTransactions
+	for _, tx := range txs {
+		ticketType := "-"
+		if tx.registrant.TicketID != nil {
+			if t, ok := ticketMap[string(*tx.registrant.TicketID)]; ok {
+				ticketType = t.Type
+			}
+		}
+
+		recentTx = append(recentTx, regEntity.RecentTransaction{
+			ID:         string(tx.order.ID),
+			BuyerName:  tx.registrant.Name,
+			TicketType: ticketType,
+			Quantity:   tx.registrant.TotalTickets,
+			Amount:     tx.order.Amount,
+			Status:     tx.order.PaymentStatus,
+			TimeAgo:    timeSince(tx.order.CreatedAt, now),
+		})
+	}
+
+	return recentTx
+}
+
+func timeSince(t, now time.Time) string {
+	diff := now.Sub(t)
+	switch {
+	case diff < time.Minute:
+		return "baru saja"
+	case diff < time.Hour:
+		return fmt.Sprintf("%d menit lalu", int(diff.Minutes()))
+	case diff < 24*time.Hour:
+		return fmt.Sprintf("%d jam lalu", int(diff.Hours()))
+	case diff < 7*24*time.Hour:
+		return fmt.Sprintf("%d hari lalu", int(diff.Hours()/24))
+	default:
+		return t.Format("02 Jan 2006")
+	}
 }
