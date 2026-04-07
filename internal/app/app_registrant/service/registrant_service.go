@@ -211,7 +211,7 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 		Amount:        totalCost,
 		Customer:      payment.Customer{Name: registrant.Name, Email: registrant.Email, Phone: registrant.Phone},
 		Items:         paymentItems,
-		ExpiryMinutes: 30,
+		ExpiryMinutes: 15,
 	}
 
 	paymentResp, err := paymentProvider.CreateTransaction(ctx, paymentReq)
@@ -221,7 +221,7 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 
 	// Insert Data Order dengan URL Midtrans
 	gateway := string(payment.GatewayMidtrans)
-	expiresAt := now.Add(30 * time.Minute)
+	expiresAt := now.Add(15 * time.Minute)
 
 	order := orderEntity.Order{
 		ID:             orderID,
