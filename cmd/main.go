@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 
 	authHandler "rakit-tiket-be/internal/app/app_auth/handler"
 	authService "rakit-tiket-be/internal/app/app_auth/service"
@@ -32,6 +34,7 @@ import (
 
 	"rakit-tiket-be/config"
 	"rakit-tiket-be/internal/pkg/client"
+	"rakit-tiket-be/internal/pkg/cron"
 	"rakit-tiket-be/internal/pkg/email"
 	"rakit-tiket-be/internal/pkg/middleware"
 	"rakit-tiket-be/internal/pkg/payment"
@@ -130,6 +133,23 @@ func main() {
 	orderHttpHandler.RegisterRoute(apiGroup)
 	eventAdapter.RegisterRoute(apiGroup)
 	artistAdapter.RegisterRoute(apiGroup)
+
+	// Start Cron Scheduler
+	scheduler := cron.NewScheduler(ordService, log)
+	if err := scheduler.Start(); err != nil {
+		log.Error(context.Background(), "Failed to start cron scheduler")
+		os.Exit(1)
+	}
+
+	// Graceful Shutdown
+	go func() {
+		quit := make(chan os.Signal, 1)
+		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+		<-quit
+		log.Info(context.Background(), "Shutting down server...")
+		scheduler.Stop()
+		os.Exit(0)
+	}()
 
 	// Start Server
 	port := envgo.GetString("PORT", "8000")

@@ -23,6 +23,7 @@ import (
 type OrderService interface {
 	HandleWebhook(ctx context.Context, gateway payment.GatewayType, payload []byte) error
 	GetOrderStatus(ctx context.Context, orderNumber string) (*model.OrderStatusResponse, error)
+	UpdateExpiredOrders(ctx context.Context) (int64, error)
 }
 
 type orderService struct {
@@ -225,7 +226,6 @@ func derefString(s *string) string {
 func (s orderService) GetOrderStatus(ctx context.Context, orderNumber string) (*model.OrderStatusResponse, error) {
 	dbTrx := regDao.NewTransactionRegistrant(ctx, s.log, s.sqlDB)
 
-	// Ambil Order
 	orders, err := dbTrx.GetOrderDAO().Search(ctx, orderEntity.OrderQuery{
 		OrderNumbers: []string{orderNumber},
 	})
@@ -235,6 +235,16 @@ func (s orderService) GetOrderStatus(ctx context.Context, orderNumber string) (*
 	}
 
 	orderData := orders[0]
+
+	if orderData.PaymentStatus == "pending" && orderData.ExpiresAt != nil && time.Now().After(*orderData.ExpiresAt) {
+		orderData.PaymentStatus = "expired"
+		if err := dbTrx.GetOrderDAO().Update(ctx, []orderEntity.Order{orderData}); err != nil {
+			s.log.Error(ctx, "Failed to update expired order", zap.Error(err))
+		}
+		if err := dbTrx.GetSqlTx().Commit(); err != nil {
+			s.log.Error(ctx, "Failed to commit expired order update", zap.Error(err))
+		}
+	}
 
 	// Ambil Registrant
 	registrants, _, err := dbTrx.GetRegistrantDAO().Search(ctx, regEntity.RegistrantQuery{
@@ -341,4 +351,39 @@ func (s orderService) GetOrderStatus(ctx context.Context, orderNumber string) (*
 		Attendees:      attStatuses,
 	}, nil
 
+}
+
+func (s orderService) UpdateExpiredOrders(ctx context.Context) (int64, error) {
+	dbTrx := regDao.NewTransactionRegistrant(ctx, s.log, s.sqlDB)
+	defer dbTrx.GetSqlTx().Rollback()
+
+	now := time.Now()
+	orders, err := dbTrx.GetOrderDAO().Search(ctx, orderEntity.OrderQuery{
+		Statuses:      []string{"pending"},
+		ExpiredBefore: &now,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to search expired orders: %w", err)
+	}
+
+	if len(orders) == 0 {
+		return 0, nil
+	}
+
+	var expiredOrders []orderEntity.Order
+	for _, order := range orders {
+		order.PaymentStatus = "expired"
+		expiredOrders = append(expiredOrders, order)
+	}
+
+	if err := dbTrx.GetOrderDAO().Update(ctx, expiredOrders); err != nil {
+		return 0, fmt.Errorf("failed to update expired orders: %w", err)
+	}
+
+	if err := dbTrx.GetSqlTx().Commit(); err != nil {
+		return 0, fmt.Errorf("failed to commit expired orders update: %w", err)
+	}
+
+	s.log.Info(ctx, "Updated expired orders", zap.Int("count", len(expiredOrders)))
+	return int64(len(expiredOrders)), nil
 }

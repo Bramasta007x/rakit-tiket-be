@@ -8,12 +8,13 @@ import (
 
 type (
 	OrderQuery struct {
-		IDs             []string `query:"id"`
-		EventIDs        []string `query:"event_id"`
-		OrderNumbers    []string `query:"order_number"`
-		RegistrantIDs   []string `query:"registrant_id"`
-		PaymentGateways []string `query:"payment_gateway"`
-		Statuses        []string `query:"payment_status"`
+		IDs             []string   `query:"id"`
+		EventIDs        []string   `query:"event_id"`
+		OrderNumbers    []string   `query:"order_number"`
+		RegistrantIDs   []string   `query:"registrant_id"`
+		PaymentGateways []string   `query:"payment_gateway"`
+		Statuses        []string   `query:"payment_status"`
+		ExpiredBefore   *time.Time `query:"expired_before"`
 	}
 
 	Order struct {
