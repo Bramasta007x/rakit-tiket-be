@@ -89,6 +89,10 @@ func (d orderDAO) Search(ctx context.Context, query entity.OrderQuery) (entity.O
 		sqlWhere.SetSQLWhere("AND", "o.payment_gateway", "IN", query.PaymentGateways)
 	}
 
+	if query.ExpiredBefore != nil {
+		sqlWhere.SetSQLWhere("AND", "o.expires_at", "<", query.ExpiredBefore)
+	}
+
 	sql := sqlgo.NewSQLGo().
 		SetSQLSchema("public").
 		SetSQLGoSelect(sqlSelect).
