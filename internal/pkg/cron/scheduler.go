@@ -32,19 +32,19 @@ func (s *Scheduler) Start() error {
 	}
 
 	s.cron.Start()
-	s.log.Info(context.Background(), "Cron scheduler started", zap.Strings("jobs", []string{"cleanupExpiredOrders (every 5 minutes)"}))
+	//s.log.Info(context.Background(), "Cron scheduler started", zap.Strings("jobs", []string{"cleanupExpiredOrders (every 5 minutes)"}))
 	return nil
 }
 
 func (s *Scheduler) Stop() {
 	ctx := s.cron.Stop()
 	<-ctx.Done()
-	s.log.Info(context.Background(), "Cron scheduler stopped")
+	//s.log.Info(context.Background(), "Cron scheduler stopped")
 }
 
 func (s *Scheduler) cleanupExpiredOrders() {
 	ctx := context.Background()
-	s.log.Info(ctx, "Running expired orders cleanup job")
+	//s.log.Info(ctx, "Running expired orders cleanup job")
 
 	count, err := s.orderService.UpdateExpiredOrders(ctx)
 	if err != nil {
@@ -53,6 +53,6 @@ func (s *Scheduler) cleanupExpiredOrders() {
 	}
 
 	if count > 0 {
-		s.log.Info(ctx, "Expired orders cleanup completed", zap.Int64("updated", count))
+		//s.log.Info(ctx, "Expired orders cleanup completed", zap.Int64("updated", count))
 	}
 }
