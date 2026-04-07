@@ -406,6 +406,8 @@ func (s registrantService) GetSummary(ctx context.Context) (int, model.SummaryRe
 		FailedRegistrants:  0,
 	}
 
+	summary.TotalRegistrantsAttendees = summary.TotalRegistrants + summary.TotalAttendees
+
 	for _, r := range registrants {
 		summary.TotalTickets += r.TotalTickets
 	}

@@ -62,13 +62,14 @@ type SummaryResponseModel struct {
 }
 
 type SummaryData struct {
-	TotalRegistrants   int     `json:"total_registrants"`
-	TotalAttendees     int     `json:"total_attendees"`
-	TotalTickets       int     `json:"total_tickets"`
-	TotalRevenue       float64 `json:"total_revenue"`
-	PaidRegistrants    int     `json:"paid_registrants"`
-	PendingRegistrants int     `json:"pending_registrants"`
-	FailedRegistrants  int     `json:"failed_registrants"`
+	TotalRegistrants          int     `json:"total_registrants"`
+	TotalAttendees            int     `json:"total_attendees"`
+	TotalRegistrantsAttendees int     `json:"total_registrants_attendees"`
+	TotalTickets              int     `json:"total_tickets"`
+	TotalRevenue              float64 `json:"total_revenue"`
+	PaidRegistrants           int     `json:"paid_registrants"`
+	PendingRegistrants        int     `json:"pending_registrants"`
+	FailedRegistrants         int     `json:"failed_registrants"`
 }
 
 func MakeSummaryResponseModel(httpCode int, summary SummaryData) (int, SummaryResponseModel) {
