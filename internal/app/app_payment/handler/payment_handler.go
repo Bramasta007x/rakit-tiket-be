@@ -140,11 +140,9 @@ func (h *paymentHandler) approveTransfer(c echo.Context) error {
 	ctx := c.Request().Context()
 	transferID := c.Param("transfer_id")
 
-	adminID := "admin"
-	if userClaims, ok := c.Get("user").(map[string]interface{}); ok {
-		if id, ok := userClaims["id"].(string); ok {
-			adminID = id
-		}
+	adminID := ""
+	if userID, ok := c.Get("user_id").(string); ok {
+		adminID = userID
 	}
 
 	var req struct {
@@ -174,11 +172,9 @@ func (h *paymentHandler) rejectTransfer(c echo.Context) error {
 	ctx := c.Request().Context()
 	transferID := c.Param("transfer_id")
 
-	adminID := "admin"
-	if userClaims, ok := c.Get("user").(map[string]interface{}); ok {
-		if id, ok := userClaims["id"].(string); ok {
-			adminID = id
-		}
+	adminID := ""
+	if userID, ok := c.Get("user_id").(string); ok {
+		adminID = userID
 	}
 
 	var req struct {

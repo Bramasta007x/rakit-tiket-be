@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"time"
 
+	orderSvc "rakit-tiket-be/internal/app/app_order/service"
 	"rakit-tiket-be/internal/app/app_payment/dao"
 	"rakit-tiket-be/internal/pkg/email"
 	pubEntity "rakit-tiket-be/pkg/entity"
 	orderEntity "rakit-tiket-be/pkg/entity/app_order"
 	appPayment "rakit-tiket-be/pkg/entity/app_payment"
 	regEntity "rakit-tiket-be/pkg/entity/app_registrant"
+	ticketEntity "rakit-tiket-be/pkg/entity/app_ticket"
 	"rakit-tiket-be/pkg/util"
 
 	"go.uber.org/zap"
@@ -100,7 +102,7 @@ func (s *manualTransferService) GetPendingTransfers(ctx context.Context) ([]Manu
 	defer dbTrx.GetSqlTx().Rollback()
 
 	transfers, err := dbTrx.GetManualTransferDAO().Search(ctx, appPayment.ManualTransferQuery{
-		Statuses: []appPayment.ManualTransferStatus{appPayment.ManualTransferStatusPending},
+		Statuses: []string{string(appPayment.ManualTransferStatusPending)},
 	})
 	if err != nil {
 		return nil, err
@@ -200,7 +202,71 @@ func (s *manualTransferService) ApproveTransfer(ctx context.Context, transferID 
 		return fmt.Errorf("failed to commit: %w", err)
 	}
 
+	// Generate PDF dan Kirim Email (Async)
+	s.sendTicketEmailAsync(ctx, order, registrant, ticketQtyMap)
+
 	return nil
+}
+
+func (s *manualTransferService) sendTicketEmailAsync(ctx context.Context, order orderEntity.Order, registrant regEntity.Registrant, ticketQtyMap map[string]int) {
+	var ticketIDs []string
+	for tID := range ticketQtyMap {
+		ticketIDs = append(ticketIDs, tID)
+	}
+
+	ticketMap := make(map[string]ticketEntity.Ticket)
+	if len(ticketIDs) > 0 {
+		dbTrx := dao.NewTransactionPayment(ctx, s.log, s.sqlDB)
+		tickets, err := dbTrx.GetTicketDAO().Search(ctx, ticketEntity.TicketQuery{
+			IDs: ticketIDs,
+		})
+		if err != nil {
+			s.log.Error(ctx, "Failed to fetch ticket data for PDF", zap.Error(err))
+		} else {
+			for _, t := range tickets {
+				ticketMap[string(t.ID)] = t
+			}
+		}
+	}
+
+	dynamicEvent := orderSvc.EventDynamicData{
+		EventName:      "Rakit Tiket Event",
+		EventDate:      "Belum Ditentukan",
+		EventTimeStart: "-",
+		EventTimeEnd:   "-",
+		EventLocation:  "Venue Terpilih",
+	}
+
+	_ = s.sqlDB.QueryRowContext(ctx, "SELECT name FROM events WHERE id = $1", order.EventID).Scan(&dynamicEvent.EventName)
+	_ = s.sqlDB.QueryRowContext(ctx, "SELECT event_date, event_time_start, event_time_end, event_location FROM landing_pages WHERE event_id = $1", order.EventID).
+		Scan(&dynamicEvent.EventDate, &dynamicEvent.EventTimeStart, &dynamicEvent.EventTimeEnd, &dynamicEvent.EventLocation)
+
+	attachments, err := orderSvc.GenerateTicketsPDF(order, registrant, ticketMap, dynamicEvent)
+	if err != nil {
+		s.log.Error(ctx, "Failed to generate PDF tickets", zap.Error(err))
+		return
+	}
+
+	s.log.Info(ctx, "Successfully generated PDF tickets", zap.Int("total", len(attachments)))
+
+	var emailAtts []email.Attachment
+	for _, att := range attachments {
+		emailAtts = append(emailAtts, email.Attachment{
+			FileName: att.FileName,
+			Data:     att.Data,
+		})
+	}
+
+	go func(targetEmail, ordNum, evtName, ownerName string, atts []email.Attachment) {
+		bgCtx := context.Background()
+
+		err := s.emailService.SendTransferApprovalEmail(bgCtx, targetEmail, ordNum, evtName, ownerName, atts)
+		if err != nil {
+			s.log.Error(bgCtx, "Gagal mengirim email approval transfer", zap.Error(err))
+		} else {
+			s.log.Info(bgCtx, "Email approval transfer berhasil terkirim!", zap.String("to", targetEmail))
+		}
+	}(registrant.Email, order.OrderNumber, dynamicEvent.EventName, registrant.Name, emailAtts)
 }
 
 func (s *manualTransferService) RejectTransfer(ctx context.Context, transferID string, adminID string, notes string) error {

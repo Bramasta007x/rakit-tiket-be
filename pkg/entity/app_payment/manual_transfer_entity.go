@@ -36,8 +36,8 @@ type ManualTransfer struct {
 type ManualTransfers []ManualTransfer
 
 type ManualTransferQuery struct {
-	IDs      []string               `query:"id"`
-	OrderIDs []string               `query:"order_id"`
-	Statuses []ManualTransferStatus `query:"status"`
-	EventIDs []string               `query:"event_id"`
+	IDs      []string `query:"id"`
+	OrderIDs []string `query:"order_id"`
+	Statuses []string `query:"status"`
+	EventIDs []string `query:"event_id"`
 }
