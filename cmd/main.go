@@ -32,6 +32,9 @@ import (
 	eventHandler "rakit-tiket-be/internal/app/app_event/handler"
 	eventService "rakit-tiket-be/internal/app/app_event/service"
 
+	paymentHandler "rakit-tiket-be/internal/app/app_payment/handler"
+	paymentService "rakit-tiket-be/internal/app/app_payment/service"
+
 	"rakit-tiket-be/config"
 	"rakit-tiket-be/internal/pkg/client"
 	"rakit-tiket-be/internal/pkg/cron"
@@ -112,6 +115,9 @@ func main() {
 	eventSvc := eventService.MakeEventService(log, sqlDB)
 	artistSvc := artistService.MakeArtistService(log, sqlDB)
 
+	bankAccountSvc := paymentService.MakeBankAccountService(log, sqlDB)
+	manualTransferSvc := paymentService.MakeManualTransferService(log, sqlDB, emailSvc)
+
 	// Adapter
 	landingPageAdapter := landingPageHandler.MakeHttpAdapter(landingPageService, fileService, authMiddleware)
 	fileAdapter := fileHandler.MakeFileAdapter(log, fileService)
@@ -121,6 +127,7 @@ func main() {
 	orderHttpHandler := orderHandler.MakeHttpAdapter(log, ordService)
 	eventAdapter := eventHandler.MakeHttpAdapter(eventSvc, authMiddleware)
 	artistAdapter := artistHandler.MakeHttpAdapter(artistSvc, fileService, authMiddleware)
+	paymentAdapter := paymentHandler.MakeHttpAdapter(log, bankAccountSvc, manualTransferSvc, authMiddleware)
 
 	// Register Routes
 	apiGroup := e.Group("/api")
@@ -133,6 +140,7 @@ func main() {
 	orderHttpHandler.RegisterRoute(apiGroup)
 	eventAdapter.RegisterRoute(apiGroup)
 	artistAdapter.RegisterRoute(apiGroup)
+	paymentAdapter.RegisterRoute(apiGroup)
 
 	// Start Cron Scheduler
 	scheduler := cron.NewScheduler(ordService, log)
