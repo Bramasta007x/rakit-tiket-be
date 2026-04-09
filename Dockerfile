@@ -9,6 +9,16 @@ RUN go build -o main cmd/main.go
 # Stage 2: Run
 FROM alpine:3.18
 WORKDIR /app
+
+# Runtime dependencies:
+# - wkhtmltopdf: generate e-ticket PDF
+# - font packages: avoid blank/garbled PDF text
+RUN apk add --no-cache \
+    ca-certificates \
+    fontconfig \
+    ttf-dejavu \
+    wkhtmltopdf
+
 # Copy binary dari stage builder
 COPY --from=builder /app/main .
 # PENTING: Copy folder script migrasi agar bisa dibaca pgClient.Migration()
