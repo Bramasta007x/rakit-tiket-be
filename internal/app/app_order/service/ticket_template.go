@@ -1,10 +1,5 @@
 package service
 
-import (
-	"bytes"
-	"html/template"
-)
-
 const ticketPDFTemplate = `
 <!DOCTYPE html>
 <html lang="id">
