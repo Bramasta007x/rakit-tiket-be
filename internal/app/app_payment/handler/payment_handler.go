@@ -1,12 +1,18 @@
 package handler
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
-	"rakit-tiket-be/internal/app/app_payment/service"
+	fileSvc "rakit-tiket-be/internal/app/app_file/service"
+	paymentSvc "rakit-tiket-be/internal/app/app_payment/service"
 	"rakit-tiket-be/internal/pkg/middleware"
 	pubEntity "rakit-tiket-be/pkg/entity"
+	fileEntity "rakit-tiket-be/pkg/entity/app_file"
 	"rakit-tiket-be/pkg/util"
 
 	"github.com/labstack/echo/v4"
@@ -19,21 +25,24 @@ type PaymentHandler interface {
 
 type paymentHandler struct {
 	log                   util.LogUtil
-	bankAccountService    service.BankAccountService
-	manualTransferService service.ManualTransferService
+	bankAccountService    paymentSvc.BankAccountService
+	manualTransferService paymentSvc.ManualTransferService
+	fileService           fileSvc.FileService
 	authMiddleware        middleware.AuthMiddleware
 }
 
 func MakePaymentHandler(
 	log util.LogUtil,
-	bankAccountService service.BankAccountService,
-	manualTransferService service.ManualTransferService,
+	bankAccountService paymentSvc.BankAccountService,
+	manualTransferService paymentSvc.ManualTransferService,
+	fileService fileSvc.FileService,
 	authMiddleware middleware.AuthMiddleware,
 ) PaymentHandler {
 	return &paymentHandler{
 		log:                   log,
 		bankAccountService:    bankAccountService,
 		manualTransferService: manualTransferService,
+		fileService:           fileService,
 		authMiddleware:        authMiddleware,
 	}
 }
@@ -70,6 +79,123 @@ func (h *paymentHandler) getBankAccounts(c echo.Context) error {
 }
 
 func (h *paymentHandler) submitTransferProof(c echo.Context) error {
+	contentType := c.Request().Header.Get("Content-Type")
+
+	if strings.Contains(contentType, "multipart/form-data") {
+		return h.handleMultipartTransferProof(c)
+	}
+
+	return h.handleJSONTransferProof(c)
+}
+
+func (h *paymentHandler) handleMultipartTransferProof(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	jsonData := c.FormValue("data")
+	if jsonData == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "Missing 'data' field in form")
+	}
+
+	var req struct {
+		OrderID             string  `json:"order_id"`
+		BankAccountID       string  `json:"bank_account_id"`
+		SenderName          string  `json:"sender_name"`
+		SenderAccountNumber *string `json:"sender_account_number"`
+		TransferDate        string  `json:"transfer_date"`
+	}
+
+	if err := json.Unmarshal([]byte(jsonData), &req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid JSON format in 'data' field: "+err.Error())
+	}
+
+	if req.OrderID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "order_id is required")
+	}
+	if req.BankAccountID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "bank_account_id is required")
+	}
+	if req.SenderName == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "sender_name is required")
+	}
+
+	transferProofURL := ""
+	transferProofFilename := ""
+
+	fileHeader, err := c.FormFile("transfer_proof")
+	if err == nil {
+		src, err := fileHeader.Open()
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "Failed to open uploaded file: "+err.Error())
+		}
+		defer src.Close()
+
+		fileBytes, err := io.ReadAll(src)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "Failed to read uploaded file: "+err.Error())
+		}
+
+		relationID := pubEntity.MakeUUID(req.OrderID, time.Now().String())
+		fileEntity := &fileEntity.FileEntity{
+			Name:        fileHeader.Filename,
+			Description: fmt.Sprintf("Transfer proof for order %s", req.OrderID),
+			Data:        fileBytes,
+			RelationEntity: pubEntity.MakeRelationEntity(
+				relationID,
+				"transfer_proof",
+			),
+		}
+
+		if err := h.fileService.Insert(ctx, fileEntity); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "Failed to save transfer proof file: "+err.Error())
+		}
+
+		filePathFolder := h.fileService.GetFilePath()
+		transferProofURL = fmt.Sprintf("%s/%s/%s/%s.ref", filePathFolder, fileEntity.RelationSource, fileEntity.RelationID.String(), fileEntity.ID.String())
+		transferProofFilename = fileHeader.Filename
+
+	} else if err != http.ErrMissingFile {
+		return echo.NewHTTPError(http.StatusBadRequest, "Error reading transfer_proof file: "+err.Error())
+	}
+
+	if transferProofURL == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "transfer_proof file is required")
+	}
+
+	transferDate, err := time.Parse(time.RFC3339, req.TransferDate)
+	if err != nil {
+		transferDate = time.Now()
+	}
+
+	serviceReq := paymentSvc.SubmitTransferProofRequest{
+		OrderID:               pubEntity.UUID(req.OrderID),
+		BankAccountID:         pubEntity.UUID(req.BankAccountID),
+		TransferProofURL:      transferProofURL,
+		TransferProofFilename: &transferProofFilename,
+		SenderName:            req.SenderName,
+		SenderAccountNumber:   req.SenderAccountNumber,
+		TransferDate:          transferDate,
+	}
+
+	transfer, err := h.manualTransferService.SubmitTransferProof(ctx, serviceReq)
+	if err != nil {
+		h.log.Error(ctx, "submitTransferProof error", zap.Error(err))
+		if err == paymentSvc.ErrTransferAlreadyExists {
+			return echo.NewHTTPError(http.StatusConflict, "Transfer proof already submitted for this order")
+		}
+		if err == paymentSvc.ErrOrderNotFound {
+			return echo.NewHTTPError(http.StatusNotFound, "Order not found")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to submit transfer proof")
+	}
+
+	return c.JSON(http.StatusCreated, map[string]interface{}{
+		"success": true,
+		"message": "Transfer proof submitted successfully",
+		"data":    transfer,
+	})
+}
+
+func (h *paymentHandler) handleJSONTransferProof(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	var req struct {
@@ -91,7 +217,7 @@ func (h *paymentHandler) submitTransferProof(c echo.Context) error {
 		transferDate = time.Now()
 	}
 
-	serviceReq := service.SubmitTransferProofRequest{
+	serviceReq := paymentSvc.SubmitTransferProofRequest{
 		OrderID:               pubEntity.UUID(req.OrderID),
 		BankAccountID:         pubEntity.UUID(req.BankAccountID),
 		TransferProofURL:      req.TransferProofURL,
@@ -104,10 +230,10 @@ func (h *paymentHandler) submitTransferProof(c echo.Context) error {
 	transfer, err := h.manualTransferService.SubmitTransferProof(ctx, serviceReq)
 	if err != nil {
 		h.log.Error(ctx, "submitTransferProof error", zap.Error(err))
-		if err == service.ErrTransferAlreadyExists {
+		if err == paymentSvc.ErrTransferAlreadyExists {
 			return echo.NewHTTPError(http.StatusConflict, "Transfer proof already submitted for this order")
 		}
-		if err == service.ErrOrderNotFound {
+		if err == paymentSvc.ErrOrderNotFound {
 			return echo.NewHTTPError(http.StatusNotFound, "Order not found")
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to submit transfer proof")
@@ -153,10 +279,10 @@ func (h *paymentHandler) approveTransfer(c echo.Context) error {
 	err := h.manualTransferService.ApproveTransfer(ctx, transferID, adminID, req.Notes)
 	if err != nil {
 		h.log.Error(ctx, "approveTransfer error", zap.Error(err))
-		if err == service.ErrManualTransferNotFound {
+		if err == paymentSvc.ErrManualTransferNotFound {
 			return echo.NewHTTPError(http.StatusNotFound, "Transfer not found")
 		}
-		if err == service.ErrInvalidStatus {
+		if err == paymentSvc.ErrInvalidStatus {
 			return echo.NewHTTPError(http.StatusBadRequest, "Transfer is not in pending status")
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to approve transfer")
@@ -185,10 +311,10 @@ func (h *paymentHandler) rejectTransfer(c echo.Context) error {
 	err := h.manualTransferService.RejectTransfer(ctx, transferID, adminID, req.Notes)
 	if err != nil {
 		h.log.Error(ctx, "rejectTransfer error", zap.Error(err))
-		if err == service.ErrManualTransferNotFound {
+		if err == paymentSvc.ErrManualTransferNotFound {
 			return echo.NewHTTPError(http.StatusNotFound, "Transfer not found")
 		}
-		if err == service.ErrInvalidStatus {
+		if err == paymentSvc.ErrInvalidStatus {
 			return echo.NewHTTPError(http.StatusBadRequest, "Transfer is not in pending status")
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to reject transfer")
@@ -203,7 +329,7 @@ func (h *paymentHandler) rejectTransfer(c echo.Context) error {
 func (h *paymentHandler) createBankAccount(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	var req service.CreateBankAccountRequest
+	var req paymentSvc.CreateBankAccountRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
@@ -225,7 +351,7 @@ func (h *paymentHandler) updateBankAccount(c echo.Context) error {
 	ctx := c.Request().Context()
 	bankAccountID := c.Param("bank_account_id")
 
-	var req service.UpdateBankAccountRequest
+	var req paymentSvc.UpdateBankAccountRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
@@ -234,7 +360,7 @@ func (h *paymentHandler) updateBankAccount(c echo.Context) error {
 	err := h.bankAccountService.UpdateBankAccount(ctx, req)
 	if err != nil {
 		h.log.Error(ctx, "updateBankAccount error", zap.Error(err))
-		if err == service.ErrBankAccountNotFound {
+		if err == paymentSvc.ErrBankAccountNotFound {
 			return echo.NewHTTPError(http.StatusNotFound, "Bank account not found")
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to update bank account")
