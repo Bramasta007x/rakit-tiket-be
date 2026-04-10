@@ -2,6 +2,7 @@ package handler
 
 import (
 	"rakit-tiket-be/internal/app/app_auth/service"
+	"rakit-tiket-be/internal/pkg/middleware"
 	"rakit-tiket-be/pkg/util"
 
 	"github.com/labstack/echo/v4"
@@ -15,9 +16,9 @@ type httpHandler struct {
 	authHandler AuthHandler
 }
 
-func MakeHttpAdapter(log util.LogUtil, authService service.AuthService) HttpHandler {
+func MakeHttpAdapter(log util.LogUtil, authService service.AuthService, authMiddleware middleware.AuthMiddleware) HttpHandler {
 	return httpHandler{
-		authHandler: MakeAuthHandler(log, authService),
+		authHandler: MakeAuthHandler(log, authService, authMiddleware),
 	}
 }
 

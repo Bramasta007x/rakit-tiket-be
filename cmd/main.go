@@ -118,7 +118,7 @@ func main() {
 	// Adapter
 	landingPageAdapter := landingPageHandler.MakeHttpAdapter(landingPageService, fileService, authMiddleware)
 	fileAdapter := fileHandler.MakeFileAdapter(log, fileService)
-	authAdapter := authHandler.MakeHttpAdapter(log, authSvc)
+	authAdapter := authHandler.MakeHttpAdapter(log, authSvc, authMiddleware)
 	ticketAdapter := ticketHandler.MakeHttpAdapter(ticketSvc, authMiddleware)
 	registrantHttpHandler := regHandler.MakeHttpAdapter(regService, authMiddleware)
 	orderHttpHandler := orderHandler.MakeHttpAdapter(log, ordService)
