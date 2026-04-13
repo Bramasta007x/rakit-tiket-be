@@ -23,6 +23,21 @@ type PaymentOption struct {
 	DisplayOrder int    `json:"display_order"`
 }
 
+type RegisterPaymentInfo struct {
+	PaymentType  string                `json:"payment_type"`
+	PaymentURL   string                `json:"payment_url,omitempty"`
+	PaymentToken string                `json:"payment_token,omitempty"`
+	BankAccounts []RegisterBankAccount `json:"bank_accounts,omitempty"`
+}
+
+type RegisterBankAccount struct {
+	BankName        string `json:"bank_name"`
+	BankCode        string `json:"bank_code"`
+	AccountNumber   string `json:"account_number"`
+	AccountHolder   string `json:"account_holder"`
+	InstructionText string `json:"instruction_text,omitempty"`
+}
+
 type PaymentConfigService interface {
 	GetActivePaymentOptions(ctx context.Context) ([]PaymentOption, error)
 	GetActiveGateway(ctx context.Context) (*app_payment.PaymentGateway, error)

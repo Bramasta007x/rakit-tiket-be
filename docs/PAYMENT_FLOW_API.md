@@ -158,7 +158,7 @@ Sistem pembayaran RakitTiket mendukung dua metode pembayaran:
 
 ### 1. Register (Booking)
 
-**Purpose:** Membuat pesanan dan memesan tiket (stock reserved)
+**Purpose:** Membuat pesanan dan memesan tiket (stock reserved). Dengan Auto-Initiate, jika hanya ada 1 metode pembayaran aktif, checkout akan langsung diproses.
 
 ```
 POST /register
@@ -186,7 +186,7 @@ POST /register
 }
 ```
 
-#### Response
+#### Response (Auto-Initiate: 1 Gateway Aktif)
 
 ```json
 {
@@ -204,13 +204,67 @@ POST /register
     "registrant": {
       "id": "8105a021-653d-1f72-a025-661fcec1856b",
       "unique_code": "TKT-2026-a1b2c3d4e5f6"
+    },
+    "payment_options": [
+      {
+        "type": "GATEWAY",
+        "code": "MIDTRANS",
+        "gateway_name": "Midtrans",
+        "display_order": 1
+      }
+    ],
+    "payment_info": {
+      "payment_type": "GATEWAY",
+      "payment_url": "https://app.sandbox.midtrans.com/snap/v2/vtweb/...",
+      "payment_token": "token-xxx"
     }
+  }
+}
+```
+
+#### Response (Multiple Payment Options)
+
+Jika lebih dari 1 metode pembayaran aktif, `payment_info` tidak akan di-return. Frontend harus menampilkan pilihan ke user.
+
+```json
+{
+  "success": true,
+  "message": "Registration successful",
+  "data": {
+    "order": {
+      "order_id": "0676566f-45b1-11e7-8f91-de3d5d3d1f9f",
+      "order_number": "TKT-2026-a1b2c3d4e5f6",
+      "amount": 100000,
+      "currency": "IDR",
+      "payment_status": "pending",
+      "expires_at": "2026-04-11T20:49:00Z"
+    },
+    "registrant": {
+      "id": "8105a021-653d-1f72-a025-661fcec1856b",
+      "unique_code": "TKT-2026-a1b2c3d4e5f6"
+    },
+    "payment_options": [
+      {
+        "type": "GATEWAY",
+        "code": "MIDTRANS",
+        "gateway_name": "Midtrans",
+        "display_order": 1
+      },
+      {
+        "type": "MANUAL",
+        "code": "MANUAL",
+        "gateway_name": "Transfer Manual",
+        "display_order": 2
+      }
+    ]
   }
 }
 ```
 
 #### Notes
 
+- **Auto-Initiate:** Jika hanya 1 gateway aktif, checkout langsung diproses dan `payment_info` di-return
+- **Multiple Options:** Jika >1 metode aktif, frontend harus tampilkan pilihan dan panggil `/checkout`
 - `expires_at` menunjukkan batas waktu untuk menyelesaikan pembayaran (15 menit)
 - Status awal order adalah `pending`
 - Jika `expires_at` tercapai tanpa pembayaran, order akan expire otomatis

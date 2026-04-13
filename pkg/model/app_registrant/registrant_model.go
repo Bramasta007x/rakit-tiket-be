@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"rakit-tiket-be/internal/app/app_payment/service"
 	"rakit-tiket-be/pkg/entity"
 	orderEntity "rakit-tiket-be/pkg/entity/app_order"
 	appRegistrantEntity "rakit-tiket-be/pkg/entity/app_registrant"
@@ -37,8 +38,10 @@ type RegisterRequest struct {
 }
 
 type RegisterResponse struct {
-	Order      OrderInfo      `json:"order"`
-	Registrant RegistrantInfo `json:"registrant"`
+	Order          OrderInfo                    `json:"order"`
+	Registrant     RegistrantInfo               `json:"registrant"`
+	PaymentOptions []service.PaymentOption      `json:"payment_options,omitempty"`
+	PaymentInfo    *service.RegisterPaymentInfo `json:"payment_info,omitempty"`
 }
 
 type OrderInfo struct {

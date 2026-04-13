@@ -107,13 +107,14 @@ func main() {
 	authSvc := authService.MakeAuthService(log, sqlDB)
 
 	ticketSvc := ticketService.MakeTicketService(log, sqlDB)
-	regService := regService.MakeRegistrantService(log, sqlDB)
 	eventSvc := eventService.MakeEventService(log, sqlDB)
 	artistSvc := artistService.MakeArtistService(log, sqlDB)
 
 	bankAccountSvc := paymentService.MakeBankAccountService(log, sqlDB)
 	manualTransferSvc := paymentService.MakeManualTransferService(log, sqlDB, emailSvc)
 	paymentConfigSvc := paymentService.MakePaymentConfigService(log, sqlDB)
+	checkoutInitiator := paymentService.MakeCheckoutInitiator(log, sqlDB, paymentFactory, bankAccountSvc)
+	regService := regService.MakeRegistrantService(log, sqlDB, checkoutInitiator, paymentConfigSvc)
 	checkoutSvc := paymentService.MakeCheckoutService(log, sqlDB, paymentFactory, bankAccountSvc, paymentConfigSvc)
 	ordService := orderService.MakeOrderService(log, sqlDB, paymentFactory, emailSvc)
 

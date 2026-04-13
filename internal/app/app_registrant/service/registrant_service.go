@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	paymentSvc "rakit-tiket-be/internal/app/app_payment/service"
 	"rakit-tiket-be/internal/app/app_registrant/dao"
 	pubEntity "rakit-tiket-be/pkg/entity"
 	eventEntity "rakit-tiket-be/pkg/entity/app_event"
@@ -30,15 +31,28 @@ type RegistrantService interface {
 	GetDashboard(ctx context.Context, req model.DashboardRequestModel) (int, model.DashboardResponseModel)
 }
 
-type registrantService struct {
-	log   util.LogUtil
-	sqlDB *sql.DB
+type PaymentConfigProvider interface {
+	GetActivePaymentOptions(ctx context.Context) ([]paymentSvc.PaymentOption, error)
 }
 
-func MakeRegistrantService(log util.LogUtil, sqlDB *sql.DB) RegistrantService {
+type registrantService struct {
+	log                   util.LogUtil
+	sqlDB                 *sql.DB
+	checkoutInitiator     paymentSvc.CheckoutInitiator
+	paymentConfigProvider PaymentConfigProvider
+}
+
+func MakeRegistrantService(
+	log util.LogUtil,
+	sqlDB *sql.DB,
+	checkoutInitiator paymentSvc.CheckoutInitiator,
+	paymentConfigProvider PaymentConfigProvider,
+) RegistrantService {
 	return registrantService{
-		log:   log,
-		sqlDB: sqlDB,
+		log:                   log,
+		sqlDB:                 sqlDB,
+		checkoutInitiator:     checkoutInitiator,
+		paymentConfigProvider: paymentConfigProvider,
 	}
 }
 
@@ -213,7 +227,7 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 		return nil, err
 	}
 
-	return &model.RegisterResponse{
+	response := &model.RegisterResponse{
 		Order: model.OrderInfo{
 			OrderID:       string(order.ID),
 			OrderNumber:   order.OrderNumber,
@@ -226,7 +240,41 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 			ID:         string(registrant.ID),
 			UniqueCode: registrant.UniqueCode,
 		},
-	}, nil
+	}
+
+	paymentOptions, err := s.paymentConfigProvider.GetActivePaymentOptions(ctx)
+	if err != nil {
+		s.log.Error(ctx, "Register.GetActivePaymentOptions", zap.Error(err))
+		return response, nil
+	}
+
+	if len(paymentOptions) == 0 {
+		return response, nil
+	}
+
+	response.PaymentOptions = paymentOptions
+
+	if len(paymentOptions) == 1 {
+		option := paymentOptions[0]
+
+		if option.Type == "GATEWAY" {
+			initiateResult, err := s.checkoutInitiator.InitiateGatewayPayment(ctx, &order)
+			if err != nil {
+				s.log.Error(ctx, "Register.InitiateGatewayPayment", zap.Error(err))
+				return response, nil
+			}
+
+			response.PaymentInfo = &paymentSvc.RegisterPaymentInfo{
+				PaymentType:  initiateResult.PaymentType,
+				PaymentURL:   initiateResult.PaymentInfo.PaymentURL,
+				PaymentToken: initiateResult.PaymentInfo.PaymentToken,
+			}
+
+			response.Order.PaymentStatus = order.PaymentStatus
+		}
+	}
+
+	return response, nil
 }
 
 func (s registrantService) List(ctx context.Context, req model.SearchRegistrantsRequestModel) (int, model.SearchRegistrantsResponseModel) {
