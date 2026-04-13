@@ -7,6 +7,7 @@ type GatewayType string
 const (
 	GatewayMidtrans GatewayType = "MIDTRANS"
 	GatewayXendit   GatewayType = "XENDIT"
+	GatewayDoku     GatewayType = "DOKU"
 )
 
 // DTO Request (Universal)
