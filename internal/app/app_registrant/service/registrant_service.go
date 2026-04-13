@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"rakit-tiket-be/internal/app/app_registrant/dao"
-	"rakit-tiket-be/internal/pkg/payment"
 	pubEntity "rakit-tiket-be/pkg/entity"
 	eventEntity "rakit-tiket-be/pkg/entity/app_event"
 	orderEntity "rakit-tiket-be/pkg/entity/app_order"
@@ -32,16 +31,14 @@ type RegistrantService interface {
 }
 
 type registrantService struct {
-	log            util.LogUtil
-	sqlDB          *sql.DB
-	paymentFactory *payment.PaymentFactory
+	log   util.LogUtil
+	sqlDB *sql.DB
 }
 
-func MakeRegistrantService(log util.LogUtil, sqlDB *sql.DB, paymentFactory *payment.PaymentFactory) RegistrantService {
+func MakeRegistrantService(log util.LogUtil, sqlDB *sql.DB) RegistrantService {
 	return registrantService{
-		log:            log,
-		sqlDB:          sqlDB,
-		paymentFactory: paymentFactory,
+		log:   log,
+		sqlDB: sqlDB,
 	}
 }
 
@@ -105,9 +102,8 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 		return nil, fmt.Errorf("maksimal %d tiket per registrasi untuk event ini", eventData.MaxTicketPerTx)
 	}
 
-	// ATOMIC BOOKING STOCK & Mapping Payment
+	// ATOMIC BOOKING STOCK
 	var totalCost float64
-	var paymentItems []payment.Item
 
 	for tID, qty := range ticketQtyMap {
 		ticketData, exists := ticketMap[tID]
@@ -123,12 +119,6 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 
 		// Hitung Harga
 		totalCost += ticketData.Price * float64(qty)
-		paymentItems = append(paymentItems, payment.Item{
-			ID:       string(ticketData.ID),
-			Name:     ticketData.Title,
-			Price:    ticketData.Price,
-			Quantity: qty,
-		})
 	}
 
 	// Generate Identifier Dinamis (Menggunakan Prefix dari Event)
@@ -200,41 +190,18 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 		}
 	}
 
-	// Panggil Payment Gateway via Factory
-	paymentProvider, err := s.paymentFactory.GetProvider(payment.GatewayMidtrans)
-	if err != nil {
-		return nil, err
-	}
-
-	paymentReq := payment.CreateTransactionRequest{
-		OrderID:       orderNumber,
-		Amount:        totalCost,
-		Customer:      payment.Customer{Name: registrant.Name, Email: registrant.Email, Phone: registrant.Phone},
-		Items:         paymentItems,
-		ExpiryMinutes: 15,
-	}
-
-	paymentResp, err := paymentProvider.CreateTransaction(ctx, paymentReq)
-	if err != nil {
-		return nil, fmt.Errorf("payment gateway error: %v", err)
-	}
-
-	// Insert Data Order dengan URL Midtrans
-	gateway := string(payment.GatewayMidtrans)
+	// Insert Data Order (Checkout akan dilakukan terpisah)
 	expiresAt := now.Add(15 * time.Minute)
 
 	order := orderEntity.Order{
-		ID:             orderID,
-		EventID:        eventID,
-		RegistrantID:   registrantID,
-		OrderNumber:    orderNumber,
-		Amount:         totalCost,
-		Currency:       "IDR",
-		PaymentGateway: &gateway,
-		PaymentStatus:  "pending",
-		PaymentToken:   &paymentResp.Token,
-		PaymentURL:     &paymentResp.RedirectURL,
-		ExpiresAt:      &expiresAt,
+		ID:            orderID,
+		EventID:       eventID,
+		RegistrantID:  registrantID,
+		OrderNumber:   orderNumber,
+		Amount:        totalCost,
+		Currency:      "IDR",
+		PaymentStatus: orderEntity.OrderStatusPending,
+		ExpiresAt:     &expiresAt,
 	}
 	order.CreatedAt = now
 
@@ -253,8 +220,7 @@ func (s registrantService) Register(ctx context.Context, req model.RegisterReque
 			Amount:        order.Amount,
 			Currency:      order.Currency,
 			PaymentStatus: order.PaymentStatus,
-			PaymentToken:  paymentResp.Token,
-			RedirectURL:   paymentResp.RedirectURL,
+			ExpiresAt:     order.ExpiresAt,
 		},
 		Registrant: model.RegistrantInfo{
 			ID:         string(registrant.ID),

@@ -42,13 +42,12 @@ type RegisterResponse struct {
 }
 
 type OrderInfo struct {
-	OrderID       string  `json:"order_id"`
-	OrderNumber   string  `json:"order_number"`
-	Amount        float64 `json:"amount"`
-	Currency      string  `json:"currency"`
-	PaymentStatus string  `json:"payment_status"`
-	PaymentToken  string  `json:"payment_token"`
-	RedirectURL   string  `json:"redirect_url"`
+	OrderID       string     `json:"order_id"`
+	OrderNumber   string     `json:"order_number"`
+	Amount        float64    `json:"amount"`
+	Currency      string     `json:"currency"`
+	PaymentStatus string     `json:"payment_status"`
+	ExpiresAt     *time.Time `json:"expires_at"`
 }
 
 type RegistrantInfo struct {
