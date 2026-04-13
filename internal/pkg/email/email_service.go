@@ -14,6 +14,8 @@ import (
 type EmailService interface {
 	SendTicketEmail(ctx context.Context, toEmail, orderNumber, eventName, ownerName string, attachments []Attachment) error
 	SendTransferApprovalEmail(ctx context.Context, toEmail, orderNumber, eventName, ownerName string, attachments []Attachment) error
+	SendPaymentRejectedEmail(ctx context.Context, toEmail, orderNumber, eventName, ownerName, reason string) error
+	SendOrderExpiredEmail(ctx context.Context, toEmail, orderNumber, eventName, ownerName string) error
 }
 
 type Attachment struct {
@@ -134,6 +136,86 @@ func (s emailService) SendTransferApprovalEmail(ctx context.Context, toEmail, or
 	s.log.Info(ctx, "Mencoba mengirim email approval transfer...", zap.String("to", toEmail))
 	if err := d.DialAndSend(m); err != nil {
 		s.log.Error(ctx, "Gagal mengirim email approval", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+func (s emailService) SendPaymentRejectedEmail(ctx context.Context, toEmail, orderNumber, eventName, ownerName, reason string) error {
+	m := gomail.NewMessage()
+
+	m.SetHeader("From", m.FormatAddress(s.senderEmail, s.senderName))
+	m.SetHeader("To", toEmail)
+	m.SetHeader("Subject", "Pembayaran Transfer Manual Ditolak - "+orderNumber)
+
+	htmlBody := fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html>
+	<body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; padding: 20px;">
+		<div style="max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 10px; padding: 20px; background-color: #f9f9f9;">
+			<h2 style="color: #dc2626; text-align: center;">Pembayaran Ditolak ❌</h2>
+			<p>Halo <b>%s</b>,</p>
+			<p>Mohon maaf, pembayaran transfer manual Anda untuk event <strong>%s</strong> telah <b style="color:#dc2626;">ditolak</b>.</p>
+			<p>Nomor pesanan: <b style="color:#1e40af;">%s</b></p>
+			<div style="background-color: #fef2f2; padding: 15px; border-left: 4px solid #dc2626; margin: 20px 0;">
+				<p style="margin: 0;"><b>Alasan penolakan:</b></p>
+				<p style="margin: 5px 0 0 0;">%s</p>
+			</div>
+			<p>Silakan lakukan pembayaran ulang dan upload bukti transfer yang valid sebelum batas waktu berakhir.</p>
+			<p>Jika Anda membutuhkan bantuan, silakan hubungi kami.</p>
+			<p>Salam Hangat,<br><b>Tim %s</b></p>
+		</div>
+	</body>
+	</html>
+	`, ownerName, eventName, orderNumber, reason, s.senderName)
+
+	m.SetBody("text/html", htmlBody)
+
+	d := gomail.NewDialer(s.host, s.port, s.user, s.password)
+
+	s.log.Info(ctx, "Mencoba mengirim email penolakan pembayaran...", zap.String("to", toEmail))
+	if err := d.DialAndSend(m); err != nil {
+		s.log.Error(ctx, "Gagal mengirim email penolakan", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+func (s emailService) SendOrderExpiredEmail(ctx context.Context, toEmail, orderNumber, eventName, ownerName string) error {
+	m := gomail.NewMessage()
+
+	m.SetHeader("From", m.FormatAddress(s.senderEmail, s.senderName))
+	m.SetHeader("To", toEmail)
+	m.SetHeader("Subject", "Pesanan Kadaluwarsa - "+orderNumber)
+
+	htmlBody := fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html>
+	<body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; padding: 20px;">
+		<div style="max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 10px; padding: 20px; background-color: #f9f9f9;">
+			<h2 style="color: #f59e0b; text-align: center;">Pesanan Kadaluwarsa ⏰</h2>
+			<p>Halo <b>%s</b>,</p>
+			<p>Mohon maaf, pesanan Anda untuk event <strong>%s</strong> telah <b style="color:#f59e0b;">kadaluwarsa</b> karena batas waktu pembayaran telah tercapai.</p>
+			<p>Nomor pesanan: <b style="color:#1e40af;">%s</b></p>
+			<div style="background-color: #fffbeb; padding: 15px; border-left: 4px solid #f59e0b; margin: 20px 0;">
+				<p style="margin: 0;">Tiket yang dipesan telah dikembalikan ke sistem dan tidak dapat digunakan lagi.</p>
+			</div>
+			<p>Jika Anda masih tertarik untuk mengikuti event ini, silakan lakukan pemesanan ulang.</p>
+			<p>Salam Hangat,<br><b>Tim %s</b></p>
+		</div>
+	</body>
+	</html>
+	`, ownerName, eventName, orderNumber, s.senderName)
+
+	m.SetBody("text/html", htmlBody)
+
+	d := gomail.NewDialer(s.host, s.port, s.user, s.password)
+
+	s.log.Info(ctx, "Mencoba mengirim email pesanan kadaluwarsa...", zap.String("to", toEmail))
+	if err := d.DialAndSend(m); err != nil {
+		s.log.Error(ctx, "Gagal mengirim email kadaluwarsa", zap.Error(err))
 		return err
 	}
 
