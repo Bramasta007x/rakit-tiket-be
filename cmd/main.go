@@ -107,13 +107,15 @@ func main() {
 	authSvc := authService.MakeAuthService(log, sqlDB)
 
 	ticketSvc := ticketService.MakeTicketService(log, sqlDB)
-	regService := regService.MakeRegistrantService(log, sqlDB, paymentFactory)
-	ordService := orderService.MakeOrderService(log, sqlDB, paymentFactory, emailSvc)
+	regService := regService.MakeRegistrantService(log, sqlDB)
 	eventSvc := eventService.MakeEventService(log, sqlDB)
 	artistSvc := artistService.MakeArtistService(log, sqlDB)
 
 	bankAccountSvc := paymentService.MakeBankAccountService(log, sqlDB)
 	manualTransferSvc := paymentService.MakeManualTransferService(log, sqlDB, emailSvc)
+	paymentConfigSvc := paymentService.MakePaymentConfigService(log, sqlDB)
+	checkoutSvc := paymentService.MakeCheckoutService(log, sqlDB, paymentFactory, bankAccountSvc, paymentConfigSvc)
+	ordService := orderService.MakeOrderService(log, sqlDB, paymentFactory, emailSvc)
 
 	// Adapter
 	landingPageAdapter := landingPageHandler.MakeHttpAdapter(landingPageService, fileService, authMiddleware)
@@ -124,7 +126,7 @@ func main() {
 	orderHttpHandler := orderHandler.MakeHttpAdapter(log, ordService)
 	eventAdapter := eventHandler.MakeHttpAdapter(eventSvc, authMiddleware)
 	artistAdapter := artistHandler.MakeHttpAdapter(artistSvc, fileService, authMiddleware)
-	paymentAdapter := paymentHandler.MakeHttpAdapter(log, bankAccountSvc, manualTransferSvc, fileService, authMiddleware)
+	paymentAdapter := paymentHandler.MakeHttpAdapter(log, bankAccountSvc, manualTransferSvc, checkoutSvc, paymentConfigSvc, fileService, authMiddleware)
 
 	// Register Routes
 	apiGroup := e.Group("/api")
