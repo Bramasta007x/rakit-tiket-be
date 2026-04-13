@@ -27,6 +27,8 @@ type paymentHandler struct {
 	log                   util.LogUtil
 	bankAccountService    paymentSvc.BankAccountService
 	manualTransferService paymentSvc.ManualTransferService
+	checkoutService       paymentSvc.CheckoutService
+	paymentConfigService  paymentSvc.PaymentConfigService
 	fileService           fileSvc.FileService
 	authMiddleware        middleware.AuthMiddleware
 }
@@ -35,6 +37,8 @@ func MakePaymentHandler(
 	log util.LogUtil,
 	bankAccountService paymentSvc.BankAccountService,
 	manualTransferService paymentSvc.ManualTransferService,
+	checkoutService paymentSvc.CheckoutService,
+	paymentConfigService paymentSvc.PaymentConfigService,
 	fileService fileSvc.FileService,
 	authMiddleware middleware.AuthMiddleware,
 ) PaymentHandler {
@@ -42,6 +46,8 @@ func MakePaymentHandler(
 		log:                   log,
 		bankAccountService:    bankAccountService,
 		manualTransferService: manualTransferService,
+		checkoutService:       checkoutService,
+		paymentConfigService:  paymentConfigService,
 		fileService:           fileService,
 		authMiddleware:        authMiddleware,
 	}
@@ -49,18 +55,32 @@ func MakePaymentHandler(
 
 func (h *paymentHandler) RegisterRouter(g *echo.Group) {
 	public := g.Group("/v1")
+
 	public.GET("/bank-accounts", h.getBankAccounts)
 	public.POST("/transfers/proof", h.submitTransferProof)
+	public.POST("/checkout/:order_id", h.initiateCheckout)
+	public.GET("/payment-options", h.getPaymentOptions)
 
 	admin := g.Group("/v1/admin")
 	admin.Use(h.authMiddleware.VerifyToken)
 	admin.Use(h.authMiddleware.RequireAdmin)
+
 	admin.GET("/transfers/pending", h.getPendingTransfers)
 	admin.POST("/transfers/:transfer_id/approve", h.approveTransfer)
 	admin.POST("/transfers/:transfer_id/reject", h.rejectTransfer)
+
 	admin.POST("/bank-accounts", h.createBankAccount)
 	admin.PUT("/bank-accounts/:bank_account_id", h.updateBankAccount)
 	admin.DELETE("/bank-accounts/:bank_account_id", h.deleteBankAccount)
+
+	admin.GET("/gateways", h.getAllGateways)
+	admin.POST("/gateways/:code/activate", h.activateGateway)
+	admin.POST("/gateways/:code/deactivate", h.deactivateGateway)
+	admin.PUT("/gateways/:code/display-order", h.setGatewayDisplayOrder)
+
+	admin.POST("/manual-transfer/enable", h.enableManualTransfer)
+	admin.POST("/manual-transfer/disable", h.disableManualTransfer)
+	admin.PUT("/manual-transfer/display-order", h.setManualTransferDisplayOrder)
 }
 
 func (h *paymentHandler) getBankAccounts(c echo.Context) error {
@@ -385,5 +405,189 @@ func (h *paymentHandler) deleteBankAccount(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Bank account deleted successfully",
+	})
+}
+
+func (h *paymentHandler) initiateCheckout(c echo.Context) error {
+	orderID := c.Param("order_id")
+	if orderID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "order_id is required")
+	}
+
+	var req struct {
+		PaymentType string `json:"payment_type"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+
+	if req.PaymentType == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "payment_type is required")
+	}
+
+	data, err := h.checkoutService.InitiateCheckout(c.Request().Context(), orderID, req.PaymentType)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return c.JSON(http.StatusNotFound, map[string]interface{}{
+				"success": false,
+				"message": err.Error(),
+			})
+		}
+		if strings.Contains(err.Error(), "expired") {
+			return c.JSON(http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": err.Error(),
+			})
+		}
+		h.log.Error(c.Request().Context(), "initiateCheckout error", zap.Error(err))
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data":    data,
+	})
+}
+
+func (h *paymentHandler) getPaymentOptions(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	options, err := h.checkoutService.GetActivePaymentOptions(ctx)
+	if err != nil {
+		h.log.Error(ctx, "getPaymentOptions error", zap.Error(err))
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch payment options")
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data":    options,
+	})
+}
+
+func (h *paymentHandler) getAllGateways(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	gateways, err := h.paymentConfigService.GetAllGateways(ctx)
+	if err != nil {
+		h.log.Error(ctx, "getAllGateways error", zap.Error(err))
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch gateways")
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data":    gateways,
+	})
+}
+
+func (h *paymentHandler) activateGateway(c echo.Context) error {
+	ctx := c.Request().Context()
+	code := strings.ToUpper(c.Param("code"))
+
+	err := h.paymentConfigService.ActivateGateway(ctx, code)
+	if err != nil {
+		if err == paymentSvc.ErrGatewayNotFound {
+			return echo.NewHTTPError(http.StatusNotFound, "Gateway not found")
+		}
+		h.log.Error(ctx, "activateGateway error", zap.Error(err))
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Gateway %s activated successfully", code),
+	})
+}
+
+func (h *paymentHandler) deactivateGateway(c echo.Context) error {
+	ctx := c.Request().Context()
+	code := strings.ToUpper(c.Param("code"))
+
+	err := h.paymentConfigService.DeactivateGateway(ctx, code)
+	if err != nil {
+		if err == paymentSvc.ErrGatewayNotFound {
+			return echo.NewHTTPError(http.StatusNotFound, "Gateway not found")
+		}
+		h.log.Error(ctx, "deactivateGateway error", zap.Error(err))
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Gateway %s deactivated successfully", code),
+	})
+}
+
+func (h *paymentHandler) setGatewayDisplayOrder(c echo.Context) error {
+	ctx := c.Request().Context()
+	code := strings.ToUpper(c.Param("code"))
+
+	var req struct {
+		DisplayOrder int `json:"display_order"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+
+	err := h.paymentConfigService.SetGatewayDisplayOrder(ctx, code, req.DisplayOrder)
+	if err != nil {
+		h.log.Error(ctx, "setGatewayDisplayOrder error", zap.Error(err))
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to update display order")
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Display order updated successfully",
+	})
+}
+
+func (h *paymentHandler) enableManualTransfer(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	err := h.paymentConfigService.SetManualTransferEnabled(ctx, true)
+	if err != nil {
+		h.log.Error(ctx, "enableManualTransfer error", zap.Error(err))
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to enable manual transfer")
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Manual transfer enabled successfully",
+	})
+}
+
+func (h *paymentHandler) disableManualTransfer(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	err := h.paymentConfigService.SetManualTransferEnabled(ctx, false)
+	if err != nil {
+		h.log.Error(ctx, "disableManualTransfer error", zap.Error(err))
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to disable manual transfer")
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Manual transfer disabled successfully",
+	})
+}
+
+func (h *paymentHandler) setManualTransferDisplayOrder(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	var req struct {
+		DisplayOrder int `json:"display_order"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+
+	err := h.paymentConfigService.SetManualTransferDisplayOrder(ctx, req.DisplayOrder)
+	if err != nil {
+		h.log.Error(ctx, "setManualTransferDisplayOrder error", zap.Error(err))
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to update display order")
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Manual transfer display order updated successfully",
 	})
 }

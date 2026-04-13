@@ -17,6 +17,8 @@ type DBTransaction interface {
 
 	GetBankAccountDAO() BankAccountDAO
 	GetManualTransferDAO() ManualTransferDAO
+	GetGatewayDAO() GatewayDAO
+	GetPaymentSettingDAO() PaymentSettingDAO
 	GetRegistrantDAO() regDao.RegistrantDAO
 	GetAttendeeDAO() regDao.AttendeeDAO
 	GetOrderDAO() orderDao.OrderDAO
@@ -29,6 +31,8 @@ type dbTransaction struct {
 
 	bankAccountDAO    BankAccountDAO
 	manualTransferDAO ManualTransferDAO
+	gatewayDAO        GatewayDAO
+	paymentSettingDAO PaymentSettingDAO
 	registrantDAO     regDao.RegistrantDAO
 	attendeeDAO       regDao.AttendeeDAO
 	orderDAO          orderDao.OrderDAO
@@ -43,6 +47,8 @@ func NewTransactionPayment(ctx context.Context, log util.LogUtil, sqlDB *sql.DB)
 
 	dbTrx.bankAccountDAO = MakeBankAccountDAO(log, dbTrx)
 	dbTrx.manualTransferDAO = MakeManualTransferDAO(log, dbTrx)
+	dbTrx.gatewayDAO = MakeGatewayDAO(log, dbTrx)
+	dbTrx.paymentSettingDAO = MakePaymentSettingDAO(log, dbTrx)
 	dbTrx.registrantDAO = regDao.MakeRegistrantDAO(log, dbTrx)
 	dbTrx.attendeeDAO = regDao.MakeAttendeeDAO(log, dbTrx)
 	dbTrx.orderDAO = orderDao.MakeOrderDAO(log, dbTrx)
@@ -78,4 +84,12 @@ func (dbTrx *dbTransaction) GetTicketDAO() ticketDao.TicketDAO {
 
 func (dbTrx *dbTransaction) GetEventDAO() eventDao.EventDAO {
 	return dbTrx.eventDAO
+}
+
+func (dbTrx *dbTransaction) GetGatewayDAO() GatewayDAO {
+	return dbTrx.gatewayDAO
+}
+
+func (dbTrx *dbTransaction) GetPaymentSettingDAO() PaymentSettingDAO {
+	return dbTrx.paymentSettingDAO
 }

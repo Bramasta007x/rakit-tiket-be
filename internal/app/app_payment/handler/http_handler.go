@@ -16,6 +16,8 @@ type HttpHandler interface {
 type httpHandler struct {
 	bankAccountService    paymentSvc.BankAccountService
 	manualTransferService paymentSvc.ManualTransferService
+	checkoutService       paymentSvc.CheckoutService
+	paymentConfigService  paymentSvc.PaymentConfigService
 	fileService           fileSvc.FileService
 	authMiddleware        middleware.AuthMiddleware
 	log                   util.LogUtil
@@ -25,6 +27,8 @@ func MakeHttpAdapter(
 	log util.LogUtil,
 	bankAccountService paymentSvc.BankAccountService,
 	manualTransferService paymentSvc.ManualTransferService,
+	checkoutService paymentSvc.CheckoutService,
+	paymentConfigService paymentSvc.PaymentConfigService,
 	fileService fileSvc.FileService,
 	authMiddleware middleware.AuthMiddleware,
 ) HttpHandler {
@@ -32,6 +36,8 @@ func MakeHttpAdapter(
 		log:                   log,
 		bankAccountService:    bankAccountService,
 		manualTransferService: manualTransferService,
+		checkoutService:       checkoutService,
+		paymentConfigService:  paymentConfigService,
 		fileService:           fileService,
 		authMiddleware:        authMiddleware,
 	}
@@ -42,6 +48,8 @@ func (h httpHandler) RegisterRoute(g *echo.Group) {
 		h.log,
 		h.bankAccountService,
 		h.manualTransferService,
+		h.checkoutService,
+		h.paymentConfigService,
 		h.fileService,
 		h.authMiddleware,
 	)
