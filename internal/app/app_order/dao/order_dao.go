@@ -44,6 +44,7 @@ func (d orderDAO) Search(ctx context.Context, query entity.OrderQuery) (entity.O
 		SetSQLSelect("o.order_number", "order_number").
 		SetSQLSelect("o.amount", "amount").
 		SetSQLSelect("o.currency", "currency").
+		SetSQLSelect("o.payment_type", "payment_type").
 		SetSQLSelect("o.payment_gateway", "payment_gateway").
 		SetSQLSelect("o.payment_method", "payment_method").
 		SetSQLSelect("o.payment_channel", "payment_channel").
@@ -52,6 +53,10 @@ func (d orderDAO) Search(ctx context.Context, query entity.OrderQuery) (entity.O
 		SetSQLSelect("o.payment_url", "payment_url").
 		SetSQLSelect("o.payment_transaction_id", "payment_transaction_id").
 		SetSQLSelect("o.payment_metadata", "payment_metadata").
+		SetSQLSelect("o.payment_proof_url", "payment_proof_url").
+		SetSQLSelect("o.payment_proof_filename", "payment_proof_filename").
+		SetSQLSelect("o.verified_by", "verified_by").
+		SetSQLSelect("o.verified_at", "verified_at").
 		SetSQLSelect("o.payment_time", "payment_time").
 		SetSQLSelect("o.expires_at", "expires_at").
 		SetSQLSelect("o.deleted", "deleted").
@@ -129,6 +134,7 @@ func (d orderDAO) Search(ctx context.Context, query entity.OrderQuery) (entity.O
 			&order.OrderNumber,
 			&order.Amount,
 			&order.Currency,
+			&order.PaymentType,
 			&order.PaymentGateway,
 			&order.PaymentMethod,
 			&order.PaymentChannel,
@@ -137,6 +143,10 @@ func (d orderDAO) Search(ctx context.Context, query entity.OrderQuery) (entity.O
 			&order.PaymentURL,
 			&order.PaymentTransactionID,
 			&order.PaymentMetadata,
+			&order.PaymentProofURL,
+			&order.PaymentProofFilename,
+			&order.VerifiedBy,
+			&order.VerifiedAt,
 			&order.PaymentTime,
 			&order.ExpiresAt,
 			&order.DaoEntity.Deleted,
@@ -163,6 +173,7 @@ func (d orderDAO) SearchForUpdate(ctx context.Context, query entity.OrderQuery) 
 		SetSQLSelect("o.order_number", "order_number").
 		SetSQLSelect("o.amount", "amount").
 		SetSQLSelect("o.currency", "currency").
+		SetSQLSelect("o.payment_type", "payment_type").
 		SetSQLSelect("o.payment_gateway", "payment_gateway").
 		SetSQLSelect("o.payment_method", "payment_method").
 		SetSQLSelect("o.payment_channel", "payment_channel").
@@ -171,6 +182,10 @@ func (d orderDAO) SearchForUpdate(ctx context.Context, query entity.OrderQuery) 
 		SetSQLSelect("o.payment_url", "payment_url").
 		SetSQLSelect("o.payment_transaction_id", "payment_transaction_id").
 		SetSQLSelect("o.payment_metadata", "payment_metadata").
+		SetSQLSelect("o.payment_proof_url", "payment_proof_url").
+		SetSQLSelect("o.payment_proof_filename", "payment_proof_filename").
+		SetSQLSelect("o.verified_by", "verified_by").
+		SetSQLSelect("o.verified_at", "verified_at").
 		SetSQLSelect("o.payment_time", "payment_time").
 		SetSQLSelect("o.expires_at", "expires_at").
 		SetSQLSelect("o.deleted", "deleted").
@@ -244,6 +259,7 @@ func (d orderDAO) SearchForUpdate(ctx context.Context, query entity.OrderQuery) 
 			&order.OrderNumber,
 			&order.Amount,
 			&order.Currency,
+			&order.PaymentType,
 			&order.PaymentGateway,
 			&order.PaymentMethod,
 			&order.PaymentChannel,
@@ -252,6 +268,10 @@ func (d orderDAO) SearchForUpdate(ctx context.Context, query entity.OrderQuery) 
 			&order.PaymentURL,
 			&order.PaymentTransactionID,
 			&order.PaymentMetadata,
+			&order.PaymentProofURL,
+			&order.PaymentProofFilename,
+			&order.VerifiedBy,
+			&order.VerifiedAt,
 			&order.PaymentTime,
 			&order.ExpiresAt,
 			&order.DaoEntity.Deleted,
@@ -278,7 +298,8 @@ func (d orderDAO) Insert(ctx context.Context, orders entity.Orders) error {
 		SetSQLInsert("orders").
 		SetSQLInsertColumn(
 			"id", "event_id", "registrant_id", "order_number", "amount", "currency",
-			"payment_gateway", "payment_status", "payment_token", "payment_url",
+			"payment_type", "payment_gateway", "payment_status", "payment_token", "payment_url",
+			"payment_proof_url", "payment_proof_filename", "verified_by", "verified_at",
 			"expires_at", "deleted", "data_hash", "created_at",
 		)
 
@@ -300,10 +321,15 @@ func (d orderDAO) Insert(ctx context.Context, orders entity.Orders) error {
 			order.OrderNumber,
 			order.Amount,
 			order.Currency,
+			order.PaymentType,
 			order.PaymentGateway,
 			order.PaymentStatus,
 			order.PaymentToken,
 			order.PaymentURL,
+			order.PaymentProofURL,
+			order.PaymentProofFilename,
+			order.VerifiedBy,
+			order.VerifiedAt,
 			order.ExpiresAt,
 			order.DaoEntity.Deleted,
 			order.DaoEntity.DataHash,
@@ -357,6 +383,9 @@ func (d orderDAO) Update(ctx context.Context, orders entity.Orders) error {
 			SetSQLUpdateValue("data_hash", order.DataHash).
 			SetSQLUpdateValue("updated_at", order.UpdatedAt)
 
+		if order.PaymentType != nil {
+			sql.SetSQLUpdateValue("payment_type", order.PaymentType)
+		}
 		if order.PaymentGateway != nil {
 			sql.SetSQLUpdateValue("payment_gateway", order.PaymentGateway)
 		}
@@ -377,6 +406,18 @@ func (d orderDAO) Update(ctx context.Context, orders entity.Orders) error {
 		}
 		if order.PaymentMetadata != nil {
 			sql.SetSQLUpdateValue("payment_metadata", order.PaymentMetadata)
+		}
+		if order.PaymentProofURL != nil {
+			sql.SetSQLUpdateValue("payment_proof_url", order.PaymentProofURL)
+		}
+		if order.PaymentProofFilename != nil {
+			sql.SetSQLUpdateValue("payment_proof_filename", order.PaymentProofFilename)
+		}
+		if order.VerifiedBy != nil {
+			sql.SetSQLUpdateValue("verified_by", order.VerifiedBy)
+		}
+		if order.VerifiedAt != nil {
+			sql.SetSQLUpdateValue("verified_at", order.VerifiedAt)
 		}
 		if order.PaymentTime != nil {
 			sql.SetSQLUpdateValue("payment_time", order.PaymentTime)

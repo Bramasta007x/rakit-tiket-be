@@ -11,6 +11,7 @@ import (
 	"rakit-tiket-be/internal/pkg/email"
 	"rakit-tiket-be/internal/pkg/payment"
 	pubEntity "rakit-tiket-be/pkg/entity"
+	eventEntity "rakit-tiket-be/pkg/entity/app_event"
 	orderEntity "rakit-tiket-be/pkg/entity/app_order"
 	regEntity "rakit-tiket-be/pkg/entity/app_registrant"
 	ticketEntity "rakit-tiket-be/pkg/entity/app_ticket"
@@ -64,12 +65,10 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 	}
 	orderData := orders[0]
 
-	// Idempotency Check
 	if orderData.PaymentStatus == "paid" || orderData.PaymentStatus == "failed" || orderData.PaymentStatus == "expired" {
 		return nil
 	}
 
-	// Jika status baru adalah pending
 	if notif.PaymentStatus == "pending" {
 		orderData.PaymentMethod = &notif.PaymentType
 		orderData.PaymentChannel = &notif.PaymentChannel
@@ -79,7 +78,6 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 		return dbTrx.GetSqlTx().Commit()
 	}
 
-	// Cari Registrant dan Attendees
 	registrants, _, err := dbTrx.GetRegistrantDAO().Search(ctx, regEntity.RegistrantQuery{
 		IDs: []string{string(orderData.RegistrantID)},
 	})
@@ -119,7 +117,6 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 		}
 		orderData.PaymentTime = &now
 
-		// Send Tiket
 		var ticketIDs []string
 		for tID := range ticketQtyMap {
 			ticketIDs = append(ticketIDs, tID)
@@ -132,7 +129,6 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 			})
 
 			if err != nil {
-				// Return error agar webhook Midtrans tetap jalan, cukup log saja
 				s.log.Error(ctx, "Failed to fetch ticket data for PDF", zap.Error(err))
 			} else {
 				for _, t := range tickets {
@@ -142,17 +138,15 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 		}
 
 		dynamicEvent := EventDynamicData{
-			EventName:      "Rakit Tiket Event", // Fallback Default
+			EventName:      "Rakit Tiket Event",
 			EventDate:      "Belum Ditentukan",
 			EventTimeStart: "-",
 			EventTimeEnd:   "-",
 			EventLocation:  "Venue Terpilih",
 		}
 
-		// Cari Nama Event Asli NEED CEK
 		_ = s.sqlDB.QueryRowContext(ctx, "SELECT name FROM events WHERE id = $1", orderData.EventID).Scan(&dynamicEvent.EventName)
 
-		// Cari Waktu & Lokasi di tabel landing_pages
 		_ = s.sqlDB.QueryRowContext(ctx, "SELECT event_date, event_time_start, event_time_end, event_location FROM landing_pages WHERE event_id = $1", orderData.EventID).
 			Scan(&dynamicEvent.EventDate, &dynamicEvent.EventTimeStart, &dynamicEvent.EventTimeEnd, &dynamicEvent.EventLocation)
 
@@ -191,7 +185,6 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 		}
 	}
 
-	// Update Status Utama
 	orderData.PaymentStatus = notif.PaymentStatus
 	orderData.PaymentMethod = &notif.PaymentType
 	orderData.PaymentChannel = &notif.PaymentChannel
@@ -200,7 +193,6 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 
 	registrantData.Status = notif.PaymentStatus
 
-	// Simpan Perubahan ke DB
 	if err := dbTrx.GetOrderDAO().Update(ctx, []orderEntity.Order{orderData}); err != nil {
 		return err
 	}
@@ -208,7 +200,6 @@ func (s orderService) HandleWebhook(ctx context.Context, gateway payment.Gateway
 		return err
 	}
 
-	// Commit
 	if err := dbTrx.GetSqlTx().Commit(); err != nil {
 		return err
 	}
@@ -246,7 +237,6 @@ func (s orderService) GetOrderStatus(ctx context.Context, orderNumber string) (*
 		}
 	}
 
-	// Ambil Registrant
 	registrants, _, err := dbTrx.GetRegistrantDAO().Search(ctx, regEntity.RegistrantQuery{
 		IDs: []string{string(orderData.RegistrantID)},
 	})
@@ -257,7 +247,6 @@ func (s orderService) GetOrderStatus(ctx context.Context, orderNumber string) (*
 
 	registrantData := registrants[0]
 
-	// Ambil Attendees
 	attendees, err := dbTrx.GetAttendeeDAO().Search(ctx, regEntity.AttendeeQuery{
 		RegistrantIDs: []string{string(registrantData.ID)},
 	})
@@ -266,7 +255,6 @@ func (s orderService) GetOrderStatus(ctx context.Context, orderNumber string) (*
 		return nil, err
 	}
 
-	// Kumpulkan Ticket ID & Ambil Data Tiket
 	var ticketIDs []string
 	if registrantData.TicketID != nil {
 		ticketIDs = append(ticketIDs, string(*registrantData.TicketID))
@@ -290,7 +278,6 @@ func (s orderService) GetOrderStatus(ctx context.Context, orderNumber string) (*
 		}
 	}
 
-	// Format Registrant Data
 	var regBirthdate *string
 	if registrantData.Birthdate != nil {
 		dt := registrantData.Birthdate.Format("2006-01-02")
@@ -315,7 +302,6 @@ func (s orderService) GetOrderStatus(ctx context.Context, orderNumber string) (*
 		TicketType:  regTicketType,
 	}
 
-	// Format Attendees Data
 	var attStatuses []model.AttendeeStatus
 	for _, att := range attendees {
 		var attBirthdate *string
@@ -339,7 +325,6 @@ func (s orderService) GetOrderStatus(ctx context.Context, orderNumber string) (*
 		})
 	}
 
-	// Return Response
 	return &model.OrderStatusResponse{
 		OrderNumber:    orderData.OrderNumber,
 		PaymentMethod:  derefString(orderData.PaymentMethod),
@@ -350,7 +335,6 @@ func (s orderService) GetOrderStatus(ctx context.Context, orderNumber string) (*
 		Registrant:     regStatus,
 		Attendees:      attStatuses,
 	}, nil
-
 }
 
 func (s orderService) UpdateExpiredOrders(ctx context.Context) (int64, error) {
@@ -359,7 +343,7 @@ func (s orderService) UpdateExpiredOrders(ctx context.Context) (int64, error) {
 
 	now := time.Now()
 	orders, err := dbTrx.GetOrderDAO().Search(ctx, orderEntity.OrderQuery{
-		Statuses:      []string{"pending"},
+		Statuses:      []string{orderEntity.OrderStatusPending},
 		ExpiredBefore: &now,
 	})
 	if err != nil {
@@ -371,9 +355,45 @@ func (s orderService) UpdateExpiredOrders(ctx context.Context) (int64, error) {
 	}
 
 	var expiredOrders []orderEntity.Order
+	var registrantIDs []string
+
 	for _, order := range orders {
-		order.PaymentStatus = "expired"
+		order.PaymentStatus = orderEntity.OrderStatusExpired
 		expiredOrders = append(expiredOrders, order)
+		registrantIDs = append(registrantIDs, string(order.RegistrantID))
+	}
+
+	ticketQtyMap := make(map[string]int)
+	registrants, _, err := dbTrx.GetRegistrantDAO().Search(ctx, regEntity.RegistrantQuery{
+		IDs: registrantIDs,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to search registrants: %w", err)
+	}
+
+	registrantMap := make(map[string]regEntity.Registrant)
+	for _, reg := range registrants {
+		registrantMap[string(reg.ID)] = reg
+		if reg.TicketID != nil {
+			ticketQtyMap[string(*reg.TicketID)]++
+		}
+	}
+
+	attendees, err := dbTrx.GetAttendeeDAO().Search(ctx, regEntity.AttendeeQuery{
+		RegistrantIDs: registrantIDs,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to search attendees: %w", err)
+	}
+
+	for _, att := range attendees {
+		ticketQtyMap[string(att.TicketID)]++
+	}
+
+	for tID, qty := range ticketQtyMap {
+		if err := dbTrx.GetTicketDAO().ReleaseBooked(ctx, pubEntity.UUID(tID), qty); err != nil {
+			s.log.Error(ctx, "failed to release booked tickets", zap.String("ticket_id", tID), zap.Int("qty", qty), zap.Error(err))
+		}
 	}
 
 	if err := dbTrx.GetOrderDAO().Update(ctx, expiredOrders); err != nil {
@@ -382,6 +402,25 @@ func (s orderService) UpdateExpiredOrders(ctx context.Context) (int64, error) {
 
 	if err := dbTrx.GetSqlTx().Commit(); err != nil {
 		return 0, fmt.Errorf("failed to commit expired orders update: %w", err)
+	}
+
+	for _, order := range expiredOrders {
+		reg, ok := registrantMap[string(order.RegistrantID)]
+		if !ok {
+			continue
+		}
+
+		events, err := dbTrx.GetEventDAO().Search(ctx, eventEntity.EventQuery{
+			IDs: []string{string(order.EventID)},
+		})
+		eventName := "Event"
+		if err == nil && len(events) > 0 {
+			eventName = events[0].Name
+		}
+
+		go func(o orderEntity.Order, r regEntity.Registrant, eName string) {
+			_ = s.emailService.SendOrderExpiredEmail(ctx, r.Email, o.OrderNumber, eName, r.Name)
+		}(order, reg, eventName)
 	}
 
 	s.log.Info(ctx, "Updated expired orders", zap.Int("count", len(expiredOrders)))
