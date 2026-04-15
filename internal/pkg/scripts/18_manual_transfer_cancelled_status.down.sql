@@ -1,0 +1,3 @@
+-- Remove 'CANCELLED' status from manual_transfer_status_enum
+-- Note: Cannot remove enum values in PostgreSQL, this is a no-op for safety
+-- The CANCELLED value will remain but not be used
