@@ -410,20 +410,41 @@ func (s registrantService) GetSummary(ctx context.Context) (int, model.SummaryRe
 		return http.StatusInternalServerError, model.SummaryResponseModel{}
 	}
 
-	summary := model.SummaryData{
-		TotalRegistrants:   len(registrants),
-		TotalAttendees:     len(attendees),
-		TotalTickets:       0,
-		TotalRevenue:       0,
-		PaidRegistrants:    0,
-		PendingRegistrants: 0,
-		FailedRegistrants:  0,
+	paidRegMap := make(map[string]bool)
+	paidRegIDs := []string{}
+	for _, o := range orders {
+		if o.PaymentStatus == "paid" {
+			paidRegMap[string(o.RegistrantID)] = true
+			paidRegIDs = append(paidRegIDs, string(o.RegistrantID))
+		}
 	}
 
-	summary.TotalRegistrantsAttendees = summary.TotalRegistrants + summary.TotalAttendees
+	var paidRegistrants int
+	var paidAttendees int
+	var totalTickets int
 
 	for _, r := range registrants {
-		summary.TotalTickets += r.TotalTickets
+		if paidRegMap[string(r.ID)] {
+			paidRegistrants++
+			totalTickets += r.TotalTickets
+		}
+	}
+
+	for _, a := range attendees {
+		if paidRegMap[string(a.RegistrantID)] {
+			paidAttendees++
+		}
+	}
+
+	summary := model.SummaryData{
+		TotalRegistrants:          paidRegistrants,
+		TotalAttendees:            paidAttendees,
+		TotalRegistrantsAttendees: paidRegistrants + paidAttendees,
+		TotalTickets:              totalTickets,
+		TotalRevenue:              0,
+		PaidRegistrants:           0,
+		PendingRegistrants:        0,
+		FailedRegistrants:         0,
 	}
 
 	for _, o := range orders {
