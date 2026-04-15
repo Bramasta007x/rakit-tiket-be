@@ -33,6 +33,7 @@ type ManualTransferService interface {
 	GetTransferByOrderID(ctx context.Context, orderID string) (*appPayment.ManualTransfer, error)
 	ApproveTransfer(ctx context.Context, transferID string, adminID string, notes string) error
 	RejectTransfer(ctx context.Context, transferID string, adminID string, notes string) error
+	CancelTransfer(ctx context.Context, transferID string, adminID string, notes string) error
 }
 
 type manualTransferService struct {
@@ -188,6 +189,11 @@ func (s *manualTransferService) ApproveTransfer(ctx context.Context, transferID 
 		return fmt.Errorf("failed to update order: %w", err)
 	}
 
+	registrant.Status = "paid"
+	if err := dbTrx.GetRegistrantDAO().Update(ctx, []regEntity.Registrant{registrant}); err != nil {
+		return fmt.Errorf("failed to update registrant: %w", err)
+	}
+
 	reviewedBy := pubEntity.UUID(adminID)
 	transfer.Status = appPayment.ManualTransferStatusApproved
 	transfer.ReviewedBy = &reviewedBy
@@ -202,8 +208,154 @@ func (s *manualTransferService) ApproveTransfer(ctx context.Context, transferID 
 		return fmt.Errorf("failed to commit: %w", err)
 	}
 
-	// Generate PDF dan Kirim Email (Async)
 	s.sendTicketEmailAsync(ctx, order, registrant, ticketQtyMap)
+
+	return nil
+}
+
+func (s *manualTransferService) RejectTransfer(ctx context.Context, transferID string, adminID string, notes string) error {
+	dbTrx := dao.NewTransactionPayment(ctx, s.log, s.sqlDB)
+	defer dbTrx.GetSqlTx().Rollback()
+
+	transfer, err := dbTrx.GetManualTransferDAO().GetByID(ctx, pubEntity.UUID(transferID))
+	if err != nil {
+		return err
+	}
+	if transfer == nil {
+		return ErrManualTransferNotFound
+	}
+	if transfer.Status != appPayment.ManualTransferStatusPending {
+		return ErrInvalidStatus
+	}
+
+	orders, err := dbTrx.GetOrderDAO().Search(ctx, orderEntity.OrderQuery{
+		IDs: []string{string(transfer.OrderID)},
+	})
+	if err != nil || len(orders) == 0 {
+		return ErrOrderNotFound
+	}
+	order := orders[0]
+
+	registrants, _, err := dbTrx.GetRegistrantDAO().Search(ctx, regEntity.RegistrantQuery{
+		IDs: []string{string(order.RegistrantID)},
+	})
+	if err != nil || len(registrants) == 0 {
+		return errors.New("registrant not found")
+	}
+	registrant := registrants[0]
+
+	now := time.Now()
+	order.PaymentStatus = orderEntity.OrderStatusRejected
+	order.PaymentMethod = strPtr("MANUAL_TRANSFER")
+
+	if err := dbTrx.GetOrderDAO().Update(ctx, []orderEntity.Order{order}); err != nil {
+		return fmt.Errorf("failed to update order: %w", err)
+	}
+
+	registrant.Status = orderEntity.OrderStatusRejected
+	if err := dbTrx.GetRegistrantDAO().Update(ctx, []regEntity.Registrant{registrant}); err != nil {
+		return fmt.Errorf("failed to update registrant: %w", err)
+	}
+
+	reviewedBy := pubEntity.UUID(adminID)
+	transfer.Status = appPayment.ManualTransferStatusRejected
+	transfer.ReviewedBy = &reviewedBy
+	transfer.ReviewedAt = &now
+	transfer.AdminNotes = &notes
+
+	if err := dbTrx.GetManualTransferDAO().Update(ctx, appPayment.ManualTransfers{*transfer}); err != nil {
+		return fmt.Errorf("failed to update transfer: %w", err)
+	}
+
+	if err := dbTrx.GetSqlTx().Commit(); err != nil {
+		return fmt.Errorf("failed to commit: %w", err)
+	}
+
+	s.sendRejectionEmailAsync(ctx, order, registrant, notes)
+
+	return nil
+}
+
+func (s *manualTransferService) CancelTransfer(ctx context.Context, transferID string, adminID string, notes string) error {
+	dbTrx := dao.NewTransactionPayment(ctx, s.log, s.sqlDB)
+	defer dbTrx.GetSqlTx().Rollback()
+
+	transfer, err := dbTrx.GetManualTransferDAO().GetByID(ctx, pubEntity.UUID(transferID))
+	if err != nil {
+		return err
+	}
+	if transfer == nil {
+		return ErrManualTransferNotFound
+	}
+	if transfer.Status != appPayment.ManualTransferStatusPending && transfer.Status != appPayment.ManualTransferStatusRejected {
+		return ErrInvalidStatus
+	}
+
+	orders, err := dbTrx.GetOrderDAO().Search(ctx, orderEntity.OrderQuery{
+		IDs: []string{string(transfer.OrderID)},
+	})
+	if err != nil || len(orders) == 0 {
+		return ErrOrderNotFound
+	}
+	order := orders[0]
+
+	registrants, _, err := dbTrx.GetRegistrantDAO().Search(ctx, regEntity.RegistrantQuery{
+		IDs: []string{string(order.RegistrantID)},
+	})
+	if err != nil || len(registrants) == 0 {
+		return errors.New("registrant not found")
+	}
+	registrant := registrants[0]
+
+	attendees, err := dbTrx.GetAttendeeDAO().Search(ctx, regEntity.AttendeeQuery{
+		RegistrantIDs: []string{string(registrant.ID)},
+	})
+	if err != nil {
+		return err
+	}
+
+	ticketQtyMap := make(map[string]int)
+	if registrant.TicketID != nil {
+		ticketQtyMap[string(*registrant.TicketID)]++
+	}
+	for _, att := range attendees {
+		ticketQtyMap[string(att.TicketID)]++
+	}
+
+	for tID, qty := range ticketQtyMap {
+		if err := dbTrx.GetTicketDAO().ReleaseBooked(ctx, pubEntity.UUID(tID), qty); err != nil {
+			s.log.Error(ctx, "failed to release booked tickets during cancellation", zap.String("ticket_id", tID), zap.Int("qty", qty), zap.Error(err))
+		}
+	}
+
+	now := time.Now()
+	order.PaymentStatus = orderEntity.OrderStatusFailed
+	order.PaymentMethod = strPtr("MANUAL_TRANSFER")
+
+	if err := dbTrx.GetOrderDAO().Update(ctx, []orderEntity.Order{order}); err != nil {
+		return fmt.Errorf("failed to update order: %w", err)
+	}
+
+	registrant.Status = orderEntity.OrderStatusFailed
+	if err := dbTrx.GetRegistrantDAO().Update(ctx, []regEntity.Registrant{registrant}); err != nil {
+		return fmt.Errorf("failed to update registrant: %w", err)
+	}
+
+	reviewedBy := pubEntity.UUID(adminID)
+	transfer.Status = appPayment.ManualTransferStatusCancelled
+	transfer.ReviewedBy = &reviewedBy
+	transfer.ReviewedAt = &now
+	transfer.AdminNotes = &notes
+
+	if err := dbTrx.GetManualTransferDAO().Update(ctx, appPayment.ManualTransfers{*transfer}); err != nil {
+		return fmt.Errorf("failed to update transfer: %w", err)
+	}
+
+	if err := dbTrx.GetSqlTx().Commit(); err != nil {
+		return fmt.Errorf("failed to commit: %w", err)
+	}
+
+	s.sendCancellationEmailAsync(ctx, order, registrant, notes)
 
 	return nil
 }
@@ -269,33 +421,38 @@ func (s *manualTransferService) sendTicketEmailAsync(ctx context.Context, order 
 	}(registrant.Email, order.OrderNumber, dynamicEvent.EventName, registrant.Name, emailAtts)
 }
 
-func (s *manualTransferService) RejectTransfer(ctx context.Context, transferID string, adminID string, notes string) error {
-	dbTrx := dao.NewTransactionPayment(ctx, s.log, s.sqlDB)
-	defer dbTrx.GetSqlTx().Rollback()
+func (s *manualTransferService) sendRejectionEmailAsync(ctx context.Context, order orderEntity.Order, registrant regEntity.Registrant, reason string) {
+	eventName := "Rakit Tiket Event"
 
-	transfer, err := dbTrx.GetManualTransferDAO().GetByID(ctx, pubEntity.UUID(transferID))
-	if err != nil {
-		return err
-	}
-	if transfer == nil {
-		return ErrManualTransferNotFound
-	}
-	if transfer.Status != appPayment.ManualTransferStatusPending {
-		return ErrInvalidStatus
-	}
+	_ = s.sqlDB.QueryRowContext(ctx, "SELECT name FROM events WHERE id = $1", order.EventID).Scan(&eventName)
 
-	reviewedBy := pubEntity.UUID(adminID)
-	transfer.Status = appPayment.ManualTransferStatusRejected
-	transfer.ReviewedBy = &reviewedBy
-	reviewedAt := time.Now()
-	transfer.ReviewedAt = &reviewedAt
-	transfer.AdminNotes = &notes
+	go func(ordNum, evtName, ownerName, rejectionReason string) {
+		bgCtx := context.Background()
 
-	if err := dbTrx.GetManualTransferDAO().Update(ctx, appPayment.ManualTransfers{*transfer}); err != nil {
-		return fmt.Errorf("failed to update transfer: %w", err)
-	}
+		err := s.emailService.SendPaymentRejectedEmail(bgCtx, registrant.Email, ordNum, evtName, ownerName, rejectionReason)
+		if err != nil {
+			s.log.Error(bgCtx, "Gagal mengirim email penolakan transfer", zap.Error(err))
+		} else {
+			s.log.Info(bgCtx, "Email penolakan transfer berhasil terkirim!", zap.String("to", registrant.Email))
+		}
+	}(order.OrderNumber, eventName, registrant.Name, reason)
+}
 
-	return dbTrx.GetSqlTx().Commit()
+func (s *manualTransferService) sendCancellationEmailAsync(ctx context.Context, order orderEntity.Order, registrant regEntity.Registrant, reason string) {
+	eventName := "Rakit Tiket Event"
+
+	_ = s.sqlDB.QueryRowContext(ctx, "SELECT name FROM events WHERE id = $1", order.EventID).Scan(&eventName)
+
+	go func(ordNum, evtName, ownerName, cancelReason string) {
+		bgCtx := context.Background()
+
+		err := s.emailService.SendPaymentCancelledEmail(bgCtx, registrant.Email, ordNum, evtName, ownerName, cancelReason)
+		if err != nil {
+			s.log.Error(bgCtx, "Gagal mengirim email pembatalan transfer", zap.Error(err))
+		} else {
+			s.log.Info(bgCtx, "Email pembatalan transfer berhasil terkirim!", zap.String("to", registrant.Email))
+		}
+	}(order.OrderNumber, eventName, registrant.Name, reason)
 }
 
 func (s *manualTransferService) enrichTransferDetails(ctx context.Context, transfer *appPayment.ManualTransfer) (*ManualTransferWithDetails, error) {

@@ -68,6 +68,7 @@ func (h *paymentHandler) RegisterRouter(g *echo.Group) {
 	admin.GET("/transfers/pending", h.getPendingTransfers)
 	admin.POST("/transfers/:transfer_id/approve", h.approveTransfer)
 	admin.POST("/transfers/:transfer_id/reject", h.rejectTransfer)
+	admin.POST("/transfers/:transfer_id/cancel", h.cancelTransfer)
 
 	admin.POST("/bank-accounts", h.createBankAccount)
 	admin.PUT("/bank-accounts/:bank_account_id", h.updateBankAccount)
@@ -343,6 +344,38 @@ func (h *paymentHandler) rejectTransfer(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Transfer rejected",
+	})
+}
+
+func (h *paymentHandler) cancelTransfer(c echo.Context) error {
+	ctx := c.Request().Context()
+	transferID := c.Param("transfer_id")
+
+	adminID := ""
+	if userID, ok := c.Get("user_id").(string); ok {
+		adminID = userID
+	}
+
+	var req struct {
+		Notes string `json:"notes"`
+	}
+	c.Bind(&req)
+
+	err := h.manualTransferService.CancelTransfer(ctx, transferID, adminID, req.Notes)
+	if err != nil {
+		h.log.Error(ctx, "cancelTransfer error", zap.Error(err))
+		if err == paymentSvc.ErrManualTransferNotFound {
+			return echo.NewHTTPError(http.StatusNotFound, "Transfer not found")
+		}
+		if err == paymentSvc.ErrInvalidStatus {
+			return echo.NewHTTPError(http.StatusBadRequest, "Transfer is not in pending status")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to cancel transfer")
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Transfer cancelled",
 	})
 }
 
