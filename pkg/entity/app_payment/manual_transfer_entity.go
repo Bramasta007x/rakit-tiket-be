@@ -9,9 +9,10 @@ import (
 type ManualTransferStatus string
 
 const (
-	ManualTransferStatusPending  ManualTransferStatus = "PENDING"
-	ManualTransferStatusApproved ManualTransferStatus = "APPROVED"
-	ManualTransferStatusRejected ManualTransferStatus = "REJECTED"
+	ManualTransferStatusPending   ManualTransferStatus = "PENDING"
+	ManualTransferStatusApproved  ManualTransferStatus = "APPROVED"
+	ManualTransferStatusRejected  ManualTransferStatus = "REJECTED"
+	ManualTransferStatusCancelled ManualTransferStatus = "CANCELLED"
 )
 
 type ManualTransfer struct {

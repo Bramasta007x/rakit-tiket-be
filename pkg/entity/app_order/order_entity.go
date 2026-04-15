@@ -8,10 +8,11 @@ import (
 
 // Payment Status Constants
 const (
-	OrderStatusPending = "pending"
-	OrderStatusPaid    = "paid"
-	OrderStatusExpired = "expired"
-	OrderStatusFailed  = "failed"
+	OrderStatusPending  = "pending"
+	OrderStatusPaid     = "paid"
+	OrderStatusExpired  = "expired"
+	OrderStatusFailed   = "failed"
+	OrderStatusRejected = "rejected"
 )
 
 // Payment Type Constants
