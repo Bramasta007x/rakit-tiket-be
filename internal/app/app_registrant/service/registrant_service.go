@@ -483,6 +483,20 @@ func (s registrantService) buildDashboardSummary(ctx context.Context, dbTrx dao.
 	allOrders, _ := dbTrx.GetOrderDAO().Search(ctx, orderEntity.OrderQuery{})
 	thisMonthOrders, _ := dbTrx.GetOrderDAO().Search(ctx, orderEntity.OrderQuery{})
 
+	paidRegMap := make(map[string]bool)
+	for _, o := range allOrders {
+		if o.PaymentStatus == "paid" {
+			paidRegMap[string(o.RegistrantID)] = true
+		}
+	}
+
+	thisMonthPaidRegMap := make(map[string]bool)
+	for _, o := range thisMonthOrders {
+		if o.PaymentStatus == "paid" {
+			thisMonthPaidRegMap[string(o.RegistrantID)] = true
+		}
+	}
+
 	var thisTicketsSold, lastTicketsSold int
 	var thisRegistrants, lastRegistrants int
 	var thisRevenue, lastRevenue float64
@@ -498,14 +512,14 @@ func (s registrantService) buildDashboardSummary(ctx context.Context, dbTrx dao.
 	}
 
 	for _, r := range thisMonthRegistrants {
-		if r.CreatedAt.After(thisMonthStart) || r.CreatedAt.Equal(thisMonthStart) {
+		if (r.CreatedAt.After(thisMonthStart) || r.CreatedAt.Equal(thisMonthStart)) && thisMonthPaidRegMap[string(r.ID)] {
 			thisRegistrants++
 			thisTicketsSold += r.TotalTickets
 		}
 	}
 
 	for _, r := range allRegistrants {
-		if r.CreatedAt.After(lastMonthStart) && r.CreatedAt.Before(thisMonthStart) {
+		if r.CreatedAt.After(lastMonthStart) && r.CreatedAt.Before(thisMonthStart) && paidRegMap[string(r.ID)] {
 			lastRegistrants++
 			lastTicketsSold += r.TotalTickets
 		}
