@@ -46,6 +46,10 @@ type (
 		TotalTickets int     `json:"total_tickets"`
 		Status       string  `json:"status"`
 
+		// Check-in Info
+		CheckedIn   bool      `json:"checked_in"`
+		CheckedInAt *time.Time `json:"checked_in_at"`
+
 		Attendees Attendee `json:"attendee"`
 
 		pubEntity.DaoEntity

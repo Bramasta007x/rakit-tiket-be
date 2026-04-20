@@ -402,6 +402,8 @@ func (d registrantDAO) Update(ctx context.Context, registrants entity.Registrant
 			SetSQLUpdateValue("total_cost", reg.TotalCost).
 			SetSQLUpdateValue("total_tickets", reg.TotalTickets).
 			SetSQLUpdateValue("status", reg.Status).
+			SetSQLUpdateValue("checked_in", reg.CheckedIn).
+			SetSQLUpdateValue("checked_in_at", reg.CheckedInAt).
 			SetSQLUpdateValue("updated_at", reg.UpdatedAt).
 			SetSQLWhere("AND", "id", "=", reg.ID)
 

@@ -25,6 +25,7 @@ type OrderService interface {
 	HandleWebhook(ctx context.Context, gateway payment.GatewayType, payload []byte) error
 	GetOrderStatus(ctx context.Context, orderNumber string) (*model.OrderStatusResponse, error)
 	UpdateExpiredOrders(ctx context.Context) (int64, error)
+	ScanTicket(ctx context.Context, orderNumber string) (*model.ScanTicketResponse, error)
 }
 
 type orderService struct {
@@ -425,4 +426,72 @@ func (s orderService) UpdateExpiredOrders(ctx context.Context) (int64, error) {
 
 	s.log.Info(ctx, "Updated expired orders", zap.Int("count", len(expiredOrders)))
 	return int64(len(expiredOrders)), nil
+}
+
+func (s orderService) ScanTicket(ctx context.Context, orderNumber string) (*model.ScanTicketResponse, error) {
+	dbTrx := regDao.NewTransactionRegistrant(ctx, s.log, s.sqlDB)
+	defer dbTrx.GetSqlTx().Rollback()
+
+	orders, err := dbTrx.GetOrderDAO().Search(ctx, orderEntity.OrderQuery{
+		OrderNumbers: []string{orderNumber},
+	})
+	if err != nil || len(orders) == 0 {
+		return &model.ScanTicketResponse{
+			Success: false,
+			Message: "Order tidak ditemukan",
+		}, nil
+	}
+	order := orders[0]
+
+	if order.PaymentStatus != "paid" {
+		return &model.ScanTicketResponse{
+			Success: false,
+			Message: "Pembayaran belum lunas",
+		}, nil
+	}
+
+	registrants, _, err := dbTrx.GetRegistrantDAO().Search(ctx, regEntity.RegistrantQuery{
+		IDs: []string{string(order.RegistrantID)},
+	})
+	if err != nil || len(registrants) == 0 {
+		return &model.ScanTicketResponse{
+			Success: false,
+			Message: "Registrant tidak ditemukan",
+		}, nil
+	}
+	registrant := registrants[0]
+
+	if registrant.CheckedIn {
+		return &model.ScanTicketResponse{
+			Success:     false,
+			Message:     "Tiket sudah pernah di-scan",
+			OrderNumber: orderNumber,
+			Registrant:  registrant.Name,
+			TotalTickets: registrant.TotalTickets,
+			CheckedIn:   true,
+		}, nil
+	}
+
+	now := time.Now()
+	registrant.CheckedIn = true
+	registrant.CheckedInAt = &now
+
+	if err := dbTrx.GetRegistrantDAO().Update(ctx, []regEntity.Registrant{registrant}); err != nil {
+		return nil, fmt.Errorf("failed to update check-in status: %w", err)
+	}
+
+	if err := dbTrx.GetSqlTx().Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit check-in: %w", err)
+	}
+
+	s.log.Info(ctx, "Ticket scanned successfully", zap.String("order_number", orderNumber), zap.String("registrant", registrant.Name))
+
+	return &model.ScanTicketResponse{
+		Success:     true,
+		Message:     "Check-in berhasil",
+		OrderNumber: orderNumber,
+		Registrant:  registrant.Name,
+		TotalTickets: registrant.TotalTickets,
+		CheckedIn:   true,
+	}, nil
 }

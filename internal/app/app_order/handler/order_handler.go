@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"rakit-tiket-be/internal/app/app_order/service"
+	"rakit-tiket-be/internal/pkg/middleware"
 	"rakit-tiket-be/internal/pkg/payment"
 	"rakit-tiket-be/pkg/util"
 
@@ -18,14 +19,16 @@ type OrderHandler interface {
 }
 
 type orderHandler struct {
-	log          util.LogUtil
-	orderService service.OrderService
+	log            util.LogUtil
+	orderService   service.OrderService
+	authMiddleware middleware.AuthMiddleware
 }
 
-func MakeOrderHandler(log util.LogUtil, orderService service.OrderService) OrderHandler {
+func MakeOrderHandler(log util.LogUtil, orderService service.OrderService, authMiddleware middleware.AuthMiddleware) OrderHandler {
 	return orderHandler{
-		log:          log,
-		orderService: orderService,
+		log:            log,
+		orderService:   orderService,
+		authMiddleware: authMiddleware,
 	}
 }
 
@@ -33,6 +36,11 @@ func (h orderHandler) RegisterRouter(g *echo.Group) {
 	public := g.Group("/v1")
 	public.POST("/webhook/payment/:gateway", h.handleWebhook)
 	public.GET("/orders/:order_number/status", h.getOrderStatus)
+
+	admin := g.Group("/v1/admin")
+	admin.Use(h.authMiddleware.VerifyToken)
+	admin.Use(h.authMiddleware.RequireAdmin)
+	admin.POST("/tickets/scan", h.scanTicket)
 }
 
 func (h orderHandler) handleWebhook(c echo.Context) error {
@@ -88,4 +96,30 @@ func (h orderHandler) getOrderStatus(c echo.Context) error {
 		"success": true,
 		"data":    data,
 	})
+}
+
+func (h orderHandler) scanTicket(c echo.Context) error {
+	var req struct {
+		OrderNumber string `json:"order_number"`
+	}
+
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	if req.OrderNumber == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "order_number is required")
+	}
+
+	data, err := h.orderService.ScanTicket(c.Request().Context(), req.OrderNumber)
+	if err != nil {
+		h.log.Error(c.Request().Context(), "scanTicket error", zap.Error(err))
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if !data.Success {
+		return c.JSON(http.StatusBadRequest, data)
+	}
+
+	return c.JSON(http.StatusOK, data)
 }

@@ -30,3 +30,12 @@ type AttendeeStatus struct {
 	TicketTitle *string `json:"ticket_title"`
 	TicketType  *string `json:"ticket_type"`
 }
+
+type ScanTicketResponse struct {
+	Success     bool       `json:"success"`
+	Message     string     `json:"message"`
+	OrderNumber string     `json:"order_number,omitempty"`
+	Registrant  string     `json:"registrant,omitempty"`
+	TotalTickets int       `json:"total_tickets"`
+	CheckedIn   bool       `json:"checked_in"`
+}
