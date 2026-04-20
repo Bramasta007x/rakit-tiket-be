@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"time"
+
 	"rakit-tiket-be/pkg/entity"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -50,6 +52,16 @@ func dbConn(dsn entity.DSNEntity) *sql.DB {
 	if err != nil {
 		return nil
 	}
+
+	// Increase pool size for high concurrency war scenarios
+	sqlDB.SetMaxOpenConns(500)
+	sqlDB.SetMaxIdleConns(100)
+	sqlDB.SetConnMaxLifetime(5 * time.Minute)
+
+	// Set lock timeout to prevent long-running locks
+	sqlDB.Exec("SET lock_timeout = '10s'")
+	sqlDB.Exec("SET statement_timeout = '30s'")
+
 	return sqlDB
 }
 
@@ -64,6 +76,7 @@ func (c postgreSQLClient) Migration() error {
 	if err != nil {
 		return err
 	}
+
 	m, err := migrate.NewWithDatabaseInstance(
 		fmt.Sprintf("file://%s", envgo.GetString("MIGRATION_PATH", "../scripts")),
 		"postgres", driver)

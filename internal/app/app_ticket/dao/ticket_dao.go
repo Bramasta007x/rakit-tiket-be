@@ -304,12 +304,15 @@ func (d ticketDAO) BookStock(ctx context.Context, id pubEntity.UUID, qty int) er
 		return fmt.Errorf("invalid qty")
 	}
 
+	// Set local lock timeout for this transaction
+	d.dbTrx.GetSqlTx().ExecContext(ctx, "SET LOCAL lock_timeout = '10s'")
+
 	query := `
         UPDATE tickets
-        SET 
+        SET
             available_qty = available_qty - $1,
             booked_qty    = booked_qty + $1,
-            status = CASE 
+            status = CASE
                 WHEN available_qty - $1 <= 0 THEN 'BOOKOUT'::ticket_status_enum
                 ELSE 'AVAILABLE'::ticket_status_enum
             END,

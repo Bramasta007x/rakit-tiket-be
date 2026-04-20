@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"sync"
+	"time"
 
 	"rakit-tiket-be/internal/app/app_payment/dao"
 	"rakit-tiket-be/pkg/entity/app_payment"
@@ -57,8 +59,15 @@ type ManualTransferSetting struct {
 }
 
 type paymentConfigService struct {
-	log   util.LogUtil
-	sqlDB *sql.DB
+	log              util.LogUtil
+	sqlDB            *sql.DB
+	paymentConfigSvc PaymentConfigService
+
+	// Cache for payment options (1 minute TTL)
+	paymentOptionsCache struct {
+		options []PaymentOption
+		expires time.Time
+	}
 }
 
 func MakePaymentConfigService(log util.LogUtil, sqlDB *sql.DB) PaymentConfigService {
@@ -68,7 +77,26 @@ func MakePaymentConfigService(log util.LogUtil, sqlDB *sql.DB) PaymentConfigServ
 	}
 }
 
+var (
+	paymentOptionsCache struct {
+		options []PaymentOption
+		expires time.Time
+		mu      sync.RWMutex
+	}
+	cacheTTL = 1 * time.Minute
+)
+
 func (s *paymentConfigService) GetActivePaymentOptions(ctx context.Context) ([]PaymentOption, error) {
+	// Check cache first
+	paymentOptionsCache.mu.RLock()
+	if !paymentOptionsCache.expires.IsZero() && time.Now().Before(paymentOptionsCache.expires) && len(paymentOptionsCache.options) > 0 {
+		options := paymentOptionsCache.options
+		paymentOptionsCache.mu.RUnlock()
+		return options, nil
+	}
+	paymentOptionsCache.mu.RUnlock()
+
+	// Cache miss or expired - fetch from DB
 	dbTrx := dao.NewTransactionPayment(ctx, s.log, s.sqlDB)
 	defer dbTrx.GetSqlTx().Rollback()
 
@@ -112,6 +140,12 @@ func (s *paymentConfigService) GetActivePaymentOptions(ctx context.Context) ([]P
 			DisplayOrder: displayOrder,
 		})
 	}
+
+	// Update cache
+	paymentOptionsCache.mu.Lock()
+	paymentOptionsCache.options = options
+	paymentOptionsCache.expires = time.Now().Add(cacheTTL)
+	paymentOptionsCache.mu.Unlock()
 
 	return options, nil
 }
