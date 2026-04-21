@@ -124,7 +124,7 @@ func main() {
 	authAdapter := authHandler.MakeHttpAdapter(log, authSvc, authMiddleware)
 	ticketAdapter := ticketHandler.MakeHttpAdapter(ticketSvc, authMiddleware)
 	registrantHttpHandler := regHandler.MakeHttpAdapter(regService, authMiddleware)
-	orderHttpHandler := orderHandler.MakeHttpAdapter(log, ordService)
+	orderHttpHandler := orderHandler.MakeHttpAdapter(log, ordService, authMiddleware)
 	eventAdapter := eventHandler.MakeHttpAdapter(eventSvc, authMiddleware)
 	artistAdapter := artistHandler.MakeHttpAdapter(artistSvc, fileService, authMiddleware)
 	paymentAdapter := paymentHandler.MakeHttpAdapter(log, bankAccountSvc, manualTransferSvc, checkoutSvc, paymentConfigSvc, fileService, authMiddleware)
