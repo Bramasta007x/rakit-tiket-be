@@ -1,4 +1,4 @@
-name: Deploy to VPS
+name: Deploy Backend
 
 on:
   push:
@@ -8,24 +8,13 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Deploy via SSH
+      - name: Deploy BE via SSH
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            # 1. Update Backend
             cd ~/rakit-tiket-core/rakit-tiket-be
             git pull origin main
-            
-            # 2. Update Frontend (Bersebelahan)
-            cd ~/rakit-tiket-core/rakit-tiket-fe
-            git pull origin main
-            
-            # 3. Jalankan Docker Compose dari folder BE
-            cd ~/rakit-tiket-core/rakit-tiket-be
-            docker compose --env-file .env --env-file ../rakit-tiket-fe/.env up -d --build
+            docker compose --env-file .env up -d --build --no-deps app
