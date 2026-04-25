@@ -24,6 +24,9 @@ import (
 	orderHandler "rakit-tiket-be/internal/app/app_order/handler"
 	orderService "rakit-tiket-be/internal/app/app_order/service"
 
+	gateHandler "rakit-tiket-be/internal/app/app_gate/handler"
+	gateService "rakit-tiket-be/internal/app/app_gate/service"
+
 	artistHandler "rakit-tiket-be/internal/app/app_artist/handler"
 	artistService "rakit-tiket-be/internal/app/app_artist/service"
 
@@ -118,6 +121,9 @@ func main() {
 	checkoutSvc := paymentService.MakeCheckoutService(log, sqlDB, paymentFactory, bankAccountSvc, paymentConfigSvc)
 	ordService := orderService.MakeOrderService(log, sqlDB, paymentFactory, emailSvc)
 
+	gateSvc := gateService.MakeGateService(log, sqlDB)
+	scanSvc := gateService.MakeScanService(log, sqlDB)
+
 	// Adapter
 	landingPageAdapter := landingPageHandler.MakeHttpAdapter(landingPageService, fileService, authMiddleware)
 	fileAdapter := fileHandler.MakeFileAdapter(log, fileService)
@@ -128,6 +134,8 @@ func main() {
 	eventAdapter := eventHandler.MakeHttpAdapter(eventSvc, authMiddleware)
 	artistAdapter := artistHandler.MakeHttpAdapter(artistSvc, fileService, authMiddleware)
 	paymentAdapter := paymentHandler.MakeHttpAdapter(log, bankAccountSvc, manualTransferSvc, checkoutSvc, paymentConfigSvc, fileService, authMiddleware)
+
+	gateAdapter := gateHandler.MakeGateHandler(log, gateSvc, scanSvc, authMiddleware)
 
 	// Register Routes
 	apiGroup := e.Group("/api")
@@ -141,6 +149,8 @@ func main() {
 	eventAdapter.RegisterRoute(apiGroup)
 	artistAdapter.RegisterRoute(apiGroup)
 	paymentAdapter.RegisterRoute(apiGroup)
+
+	gateAdapter.RegisterRouter(apiGroup)
 
 	// Start Cron Scheduler
 	// scheduler := cron.NewScheduler(ordService, log)
