@@ -53,6 +53,16 @@ func (d ticketDAO) Search(ctx context.Context, query entity.TicketQuery) (entity
 		SetSQLSelect("t.sold_qty", "sold_qty").
 		SetSQLSelect("t.is_presale", "is_presale").
 		SetSQLSelect("t.order_priority", "order_priority").
+		SetSQLSelect("t.sale_start_time", "sale_start_time").
+		SetSQLSelect("t.sale_end_time", "sale_end_time").
+		SetSQLSelect("t.is_flash_sale", "is_flash_sale").
+		SetSQLSelect("t.flash_sale_price", "flash_sale_price").
+		SetSQLSelect("t.flash_start_time", "flash_start_time").
+		SetSQLSelect("t.flash_end_time", "flash_end_time").
+		SetSQLSelect("t.low_stock_threshold", "low_stock_threshold").
+		SetSQLSelect("t.show_stock_alert", "show_stock_alert").
+		SetSQLSelect("t.show_countdown", "show_countdown").
+		SetSQLSelect("t.countdown_end", "countdown_end").
 		SetSQLSelect("t.created_at", "created_at").
 		SetSQLSelect("t.updated_at", "updated_at")
 
@@ -106,6 +116,11 @@ func (d ticketDAO) Search(ctx context.Context, query entity.TicketQuery) (entity
 			&ticket.Description, &ticket.Price, &ticket.Total,
 			&ticket.AvailableQty, &ticket.BookedQty, &ticket.SoldQty,
 			&ticket.IsPresale, &ticket.OrderPriority,
+			&ticket.SaleStartTime, &ticket.SaleEndTime,
+			&ticket.IsFlashSale, &ticket.FlashSalePrice,
+			&ticket.FlashStartTime, &ticket.FlashEndTime,
+			&ticket.LowStockThreshold, &ticket.ShowStockAlert,
+			&ticket.ShowCountdown, &ticket.CountdownEnd,
 			&ticket.CreatedAt, &ticket.UpdatedAt,
 		); err != nil {
 			d.log.Error(ctx, "ticketDAO.Search.Scan", zap.Error(err))
@@ -132,6 +147,16 @@ func (d ticketDAO) SearchForUpdate(ctx context.Context, query entity.TicketQuery
 		SetSQLSelect("t.sold_qty", "sold_qty").
 		SetSQLSelect("t.is_presale", "is_presale").
 		SetSQLSelect("t.order_priority", "order_priority").
+		SetSQLSelect("t.sale_start_time", "sale_start_time").
+		SetSQLSelect("t.sale_end_time", "sale_end_time").
+		SetSQLSelect("t.is_flash_sale", "is_flash_sale").
+		SetSQLSelect("t.flash_sale_price", "flash_sale_price").
+		SetSQLSelect("t.flash_start_time", "flash_start_time").
+		SetSQLSelect("t.flash_end_time", "flash_end_time").
+		SetSQLSelect("t.low_stock_threshold", "low_stock_threshold").
+		SetSQLSelect("t.show_stock_alert", "show_stock_alert").
+		SetSQLSelect("t.show_countdown", "show_countdown").
+		SetSQLSelect("t.countdown_end", "countdown_end").
 		SetSQLSelect("t.created_at", "created_at").
 		SetSQLSelect("t.updated_at", "updated_at")
 
@@ -185,6 +210,11 @@ func (d ticketDAO) SearchForUpdate(ctx context.Context, query entity.TicketQuery
 			&ticket.Description, &ticket.Price, &ticket.Total,
 			&ticket.AvailableQty, &ticket.BookedQty, &ticket.SoldQty,
 			&ticket.IsPresale, &ticket.OrderPriority,
+			&ticket.SaleStartTime, &ticket.SaleEndTime,
+			&ticket.IsFlashSale, &ticket.FlashSalePrice,
+			&ticket.FlashStartTime, &ticket.FlashEndTime,
+			&ticket.LowStockThreshold, &ticket.ShowStockAlert,
+			&ticket.ShowCountdown, &ticket.CountdownEnd,
 			&ticket.CreatedAt, &ticket.UpdatedAt,
 		); err != nil {
 			d.log.Error(ctx, "ticketDAO.SearchForUpdate.Scan", zap.Error(err))
@@ -247,6 +277,16 @@ func (d ticketDAO) Update(ctx context.Context, tickets entity.Tickets) error {
 			SetSQLUpdateValue("sold_qty", ticket.SoldQty).
 			SetSQLUpdateValue("is_presale", ticket.IsPresale).
 			SetSQLUpdateValue("order_priority", ticket.OrderPriority).
+			SetSQLUpdateValue("sale_start_time", ticket.SaleStartTime).
+			SetSQLUpdateValue("sale_end_time", ticket.SaleEndTime).
+			SetSQLUpdateValue("is_flash_sale", ticket.IsFlashSale).
+			SetSQLUpdateValue("flash_sale_price", ticket.FlashSalePrice).
+			SetSQLUpdateValue("flash_start_time", ticket.FlashStartTime).
+			SetSQLUpdateValue("flash_end_time", ticket.FlashEndTime).
+			SetSQLUpdateValue("low_stock_threshold", ticket.LowStockThreshold).
+			SetSQLUpdateValue("show_stock_alert", ticket.ShowStockAlert).
+			SetSQLUpdateValue("show_countdown", ticket.ShowCountdown).
+			SetSQLUpdateValue("countdown_end", ticket.CountdownEnd).
 			SetSQLUpdateValue("data_hash", ticket.DataHash).
 			SetSQLUpdateValue("updated_at", ticket.UpdatedAt).
 			SetSQLWhere("AND", "id", "=", ticket.ID)

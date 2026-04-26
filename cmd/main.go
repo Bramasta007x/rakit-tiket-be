@@ -24,8 +24,11 @@ import (
 	orderHandler "rakit-tiket-be/internal/app/app_order/handler"
 	orderService "rakit-tiket-be/internal/app/app_order/service"
 
-	gateHandler "rakit-tiket-be/internal/app/app_gate/handler"
-	gateService "rakit-tiket-be/internal/app/app_gate/service"
+	gateHandler "rakit-tiket-be/internal/app/app_checkin/handler"
+	gateService "rakit-tiket-be/internal/app/app_checkin/service"
+
+	hypeHandler "rakit-tiket-be/internal/app/app_hype/handler"
+	hypeService "rakit-tiket-be/internal/app/app_hype/service"
 
 	artistHandler "rakit-tiket-be/internal/app/app_artist/handler"
 	artistService "rakit-tiket-be/internal/app/app_artist/service"
@@ -124,6 +127,8 @@ func main() {
 	gateSvc := gateService.MakeGateService(log, sqlDB)
 	scanSvc := gateService.MakeScanService(log, sqlDB)
 
+	hypeSvc := hypeService.MakeHypeService(log, sqlDB)
+
 	// Adapter
 	landingPageAdapter := landingPageHandler.MakeHttpAdapter(landingPageService, fileService, authMiddleware)
 	fileAdapter := fileHandler.MakeFileAdapter(log, fileService)
@@ -136,6 +141,8 @@ func main() {
 	paymentAdapter := paymentHandler.MakeHttpAdapter(log, bankAccountSvc, manualTransferSvc, checkoutSvc, paymentConfigSvc, fileService, authMiddleware)
 
 	gateAdapter := gateHandler.MakeGateHandler(log, gateSvc, scanSvc, authMiddleware)
+
+	hypeAdapter := hypeHandler.MakeHttpAdapter(log, hypeSvc, authMiddleware)
 
 	// Register Routes
 	apiGroup := e.Group("/api")
@@ -151,6 +158,8 @@ func main() {
 	paymentAdapter.RegisterRoute(apiGroup)
 
 	gateAdapter.RegisterRouter(apiGroup)
+
+	hypeAdapter.RegisterRoute(apiGroup)
 
 	// Start Cron Scheduler
 	// scheduler := cron.NewScheduler(ordService, log)
