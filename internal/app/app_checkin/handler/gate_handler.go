@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"rakit-tiket-be/internal/app/app_gate/service"
+	"rakit-tiket-be/internal/app/app_checkin/service"
 	"rakit-tiket-be/internal/pkg/middleware"
 	"rakit-tiket-be/pkg/util"
 

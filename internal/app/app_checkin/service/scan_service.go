@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"rakit-tiket-be/internal/app/app_gate/dao"
+	"rakit-tiket-be/internal/app/app_checkin/dao"
 	pubEntity "rakit-tiket-be/pkg/entity"
 	app_gate_config "rakit-tiket-be/pkg/entity/app_gate_config"
 	app_gate_log "rakit-tiket-be/pkg/entity/app_gate_log"

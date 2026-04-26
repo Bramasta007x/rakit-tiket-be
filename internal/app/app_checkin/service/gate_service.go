@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"rakit-tiket-be/internal/app/app_gate/dao"
+	"rakit-tiket-be/internal/app/app_checkin/dao"
 	ticketDao "rakit-tiket-be/internal/app/app_ticket/dao"
 	pubEntity "rakit-tiket-be/pkg/entity"
 	app_gate_config "rakit-tiket-be/pkg/entity/app_gate_config"
